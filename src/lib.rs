@@ -1,4 +1,5 @@
 #![feature(pattern)]
+use std::ops::{Div, Rem};
 use std::str::pattern::Pattern;
 
 // Requires "pattern" feature on nightly
@@ -18,6 +19,14 @@ pub fn scan<P: FnMut(char) -> bool>(s: &str, mut predicate: P) -> (&str, &str) {
         .map(|(i, ch)| i + ch.len_utf8())
         .unwrap_or_default();
     s.split_at(boundary)
+}
+
+pub fn divmod<T>(dividend: T, divisor: T) -> (T, T)
+where
+    T: Div<Output = T> + Copy,
+    T: Rem<Output = T> + Copy,
+{
+    (dividend / divisor, dividend % divisor)
 }
 
 #[cfg(test)]
@@ -55,5 +64,13 @@ mod tests {
     #[test]
     fn test_scan_none() {
         assert_eq!(scan("abc123", |c| c.is_ascii_digit()), ("", "abc123"));
+    }
+
+    #[test]
+    fn test_divmod() {
+        assert_eq!(divmod(5, 3), (1, 2));
+        assert_eq!(divmod(5, -3), (-1, 2));
+        assert_eq!(divmod(-5, 3), (-1, -2));
+        assert_eq!(divmod(-5, -3), (1, -2));
     }
 }
