@@ -1,6 +1,11 @@
+#![feature(pattern)]
 use std::str::pattern::Pattern;
 
-pub fn partition<'a, P: Pattern<'a>>(s: &str, pattern: P) -> Option<(&'a str, &'a str, &'a str)> {
+// Requires "pattern" feature on nightly
+pub fn partition<'a, P: Pattern<'a>>(
+    s: &'a str,
+    pattern: P,
+) -> Option<(&'a str, &'a str, &'a str)> {
     let (i, sep) = s.match_indices(pattern).next()?;
     Some((&s[..i], sep, &s[(i + sep.len())..]))
 }
@@ -11,7 +16,7 @@ mod tests {
 
     #[test]
     fn test_partition_matches() {
-        assert_eq!(partition("abc-123-xyz", '-'), Some("abc", "-", "123-xyz"));
+        assert_eq!(partition("abc-123-xyz", '-'), Some(("abc", "-", "123-xyz")));
     }
 
     #[test]
@@ -23,7 +28,7 @@ mod tests {
     fn test_partition_alternation_matches() {
         assert_eq!(
             partition("abc-123.xyz", ['.', '-']),
-            Some("abc", "-", "123.xyz")
+            Some(("abc", "-", "123.xyz"))
         );
     }
 }
