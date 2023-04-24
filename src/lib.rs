@@ -14,10 +14,9 @@ pub fn partition<'a, P: Pattern<'a>>(
 pub fn scan<P: FnMut(char) -> bool>(s: &str, mut predicate: P) -> (&str, &str) {
     let boundary = s
         .char_indices()
-        .take_while(move |&(_, ch)| predicate(ch))
-        .last()
-        .map(|(i, ch)| i + ch.len_utf8())
-        .unwrap_or_default();
+        .find(move |&(_, ch)| !predicate(ch))
+        .map(|(i, _)| i)
+        .unwrap_or_else(|| s.len());
     s.split_at(boundary)
 }
 
