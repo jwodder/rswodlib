@@ -20,6 +20,15 @@ pub fn scan<P: FnMut(char) -> bool>(s: &str, mut predicate: P) -> (&str, &str) {
     s.split_at(boundary)
 }
 
+pub fn scan_some<P: FnMut(char) -> bool>(s: &str, mut predicate: P) -> Option<(&str, &str)> {
+    let boundary = s
+        .char_indices()
+        .find(move |&(_, ch)| !predicate(ch))
+        .map(|(i, _)| i)
+        .unwrap_or_else(|| s.len());
+    (boundary > 0).then(|| s.split_at(boundary))
+}
+
 pub fn divmod<T>(dividend: T, divisor: T) -> (T, T)
 where
     T: Div<Output = T> + Copy,
@@ -63,6 +72,27 @@ mod tests {
     #[test]
     fn test_scan_none() {
         assert_eq!(scan("abc123", |c| c.is_ascii_digit()), ("", "abc123"));
+    }
+
+    #[test]
+    fn test_scan_some_half() {
+        assert_eq!(
+            scan_some("123abc", |c| c.is_ascii_digit()),
+            Some(("123", "abc"))
+        );
+    }
+
+    #[test]
+    fn test_scan_some_all() {
+        assert_eq!(
+            scan_some("123456", |c| c.is_ascii_digit()),
+            Some(("123456", ""))
+        );
+    }
+
+    #[test]
+    fn test_scan_some_none() {
+        assert_eq!(scan_some("abc123", |c| c.is_ascii_digit()), None);
     }
 
     #[test]
