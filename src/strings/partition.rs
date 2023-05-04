@@ -1,4 +1,9 @@
-// Requires "pattern" feature on nightly
+#![cfg(nightly)]
+// Requires the "pattern" feature on nightly
+// - `#![feature(pattern)]` must be enabled in the root module
+// - rswodlib is configured to only make use of nightly features when actually
+//   building on nightly.  To run a cargo command on nightly, insert `+nightly`
+//   after `cargo`.
 use std::str::pattern::Pattern;
 
 pub fn partition<'a, P: Pattern<'a>>(

@@ -5,3 +5,6 @@ edition = "2021"
 
 [dependencies]
 automod = "1.0.8"
+
+[build-dependencies]
+rustc_version = "0.4.0"
