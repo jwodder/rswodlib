@@ -1,3 +1,17 @@
+/// Divides a string in two before the first character that does not satisfy
+/// the given predicate.  If the first part is nonempty, the parts are
+/// returned.  Otherwise, `None` is returned.
+///
+/// Note that the first part is the maximal leading substring of `s` whose
+/// characters all satisfy `predicate`.
+///
+/// # Example
+///
+/// ```
+/// # use rswodlib::strings::scan_some::scan_some;
+/// assert_eq!(scan_some("123abc", |c| c.is_ascii_digit()), Some(("123", "abc")));
+/// assert_eq!(scan_some("abc123", |c| c.is_ascii_digit()), None);
+/// ```
 pub fn scan_some<P: FnMut(char) -> bool>(s: &str, mut predicate: P) -> Option<(&str, &str)> {
     let boundary = s
         .char_indices()

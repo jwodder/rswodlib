@@ -6,6 +6,17 @@
 //   after `cargo`.
 use std::str::pattern::Pattern;
 
+/// If `pattern` occurs in `s`, returns a triple of the portion of `s` before
+/// the pattern, the portion that matches the pattern, and the portion after
+/// the pattern.
+///
+/// # Example
+///
+/// ```
+/// # use rswodlib::strings::partition::partition;
+/// assert_eq!(partition("abc.123-xyz", ['-', '.']), Some(("abc", ".", "123-xyz")));
+/// assert_eq!(partition("abc_123_xyz", ['-', '.']), None);
+/// ```
 pub fn partition<'a, P: Pattern<'a>>(
     s: &'a str,
     pattern: P,
