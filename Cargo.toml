@@ -2,6 +2,12 @@
 name = "rswodlib"
 version = "0.1.0"
 edition = "2021"
+description = "Assorted Rust utility functions"
+authors = ["John Thorvald Wodder II <rswodlib@varonathe.org>"]
+repository = "https://github.com/jwodder/rswodlib"
+license = "MIT"
+exclude = ["/.*"]
+publish = false
 
 [dependencies]
 automod = "1.0.8"
