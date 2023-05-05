@@ -33,7 +33,7 @@ impl<'a> Iterator for SplitParagraphs<'a> {
             } else {
                 if i == 0 {
                     // Pretend there was a newline before the start of the
-                    // string so that a single newlines at the start will cause
+                    // string so that a single newline at the start will cause
                     // a new paragraph.
                     newlines += 1;
                 }
@@ -67,17 +67,17 @@ impl<'a> DoubleEndedIterator for SplitParagraphs<'a> {
         let mut among_newlines = true;
         for (i, ch) in self.0.char_indices().rev() {
             if ch != '\n' && ch != '\r' {
-                among_newlines = false;
-                match (newlines, pos) {
-                    (nls, Some(p)) if nls > 1 && p < self.0.len() => break,
-                    _ => pos = None,
+                if std::mem::replace(&mut among_newlines, false)
+                    && newlines > 1
+                    && pos != Some(self.0.len())
+                {
+                    break;
                 }
+                newlines = 0;
+                lf_next = false;
+                pos = None;
             } else {
-                if !std::mem::replace(&mut among_newlines, true) {
-                    newlines = 0;
-                    lf_next = false;
-                    pos = None;
-                }
+                among_newlines = true;
                 if pos.is_none() {
                     pos = Some(i + 1);
                 }
@@ -89,10 +89,12 @@ impl<'a> DoubleEndedIterator for SplitParagraphs<'a> {
                 }
             }
         }
-        if !(newlines == 1 && pos == Some(1) && self.0.len() != 1)
-            && (newlines <= 1 || pos == Some(self.0.len()))
-        {
-            pos = Some(0);
+        let length = self.0.len();
+        match (newlines, pos) {
+            (1, Some(1)) if length != 1 => (),
+            (..=1, _) => pos = Some(0),
+            (_, Some(p)) if p == length => pos = Some(0),
+            _ => (),
         }
         let (s1, s2) = self.0.split_at(pos.unwrap_or(0));
         self.0 = s1;
