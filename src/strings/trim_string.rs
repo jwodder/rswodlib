@@ -1,14 +1,7 @@
-use super::rscan_some::rscan_some;
-use super::scan_some::scan_some;
-
 /// Mutate a `String` by removing all leading & trailing whitespace
 pub fn trim_string(s: &mut String) {
-    if let Some((leading_ws, _)) = scan_some(s, char::is_whitespace) {
-        s.drain(..leading_ws.len());
-    }
-    if let Some((core, _)) = rscan_some(s, char::is_whitespace) {
-        s.truncate(core.len());
-    }
+    s.drain(..(s.len() - s.trim_start().len()));
+    s.truncate(s.trim_end().len());
 }
 
 #[cfg(test)]
