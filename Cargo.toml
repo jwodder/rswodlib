@@ -12,6 +12,7 @@ publish = false
 [dependencies]
 automod = "1.0.8"
 num-traits = "0.2.15"
+thiserror = "1.0.40"
 
 [build-dependencies]
 rustc_version = "0.4.0"
