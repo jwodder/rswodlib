@@ -11,6 +11,7 @@ publish = false
 
 [dependencies]
 automod = "1.0.8"
+bstr = { version = "1.4.0", default-features = false, features = ["std"] }
 num-traits = "0.2.15"
 thiserror = "1.0.40"
 

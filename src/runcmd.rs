@@ -1,3 +1,5 @@
+use super::strings::trim_string::trim_string;
+use bstr::ByteVec;
 use std::ffi::OsStr;
 use std::process::{Command, ExitStatus, Stdio};
 use std::str;
@@ -30,10 +32,13 @@ where
         .output()
         .map_err(ReadcmdError::Startup)?;
     if out.status.success() {
-        Ok(str::from_utf8(&out.stdout)
-            .map_err(ReadcmdError::Decode)?
-            .trim()
-            .to_string())
+        match String::from_utf8(out.stdout) {
+            Ok(mut s) => {
+                trim_string(&mut s);
+                Ok(s)
+            }
+            Err(e) => Err(ReadcmdError::Decode(e.utf8_error())),
+        }
     } else {
         Err(ReadcmdError::Exit(out.status))
     }
@@ -50,7 +55,9 @@ where
         .output()
         .map_err(RuncmdError::Startup)?;
     if out.status.success() {
-        Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+        let mut s = <Vec<u8>>::into_string_lossy(out.stdout);
+        trim_string(&mut s);
+        Ok(s)
     } else {
         Err(RuncmdError::Exit(out.status))
     }
