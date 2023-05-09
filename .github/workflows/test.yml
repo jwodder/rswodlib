@@ -52,13 +52,13 @@ jobs:
       #  uses: dtolnay/rust-toolchain@master
       #  with:
       #    toolchain: ${{ steps.minimal-version.outputs.msrv }}
-#
+
       - name: Activate cache
         if: "!startsWith(github.ref_name, 'dependabot/')"
         uses: Swatinem/rust-cache@v2
 
       - name: Build crate
-        run: cargo build --verbose
+        run: cargo build --all-targets --verbose
 
       - name: Test crate
         run: cargo test --verbose
