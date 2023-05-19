@@ -59,6 +59,7 @@ mod tests {
     #[case(1, 16, Some(8))]
     #[case(9, 16, Some(9))]
     #[case(1, 9, Some(8))]
+    #[case(1, 8, None)]
     #[case(1, 5, None)]
     fn test_find_first_property(
         #[case] low: usize,
