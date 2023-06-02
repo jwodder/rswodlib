@@ -1,3 +1,5 @@
+// cf. `gcd()` and `Integer::gcd()` from `num`
+// cf. `lcm()` and `Integer::lcm()` from `num`
 use num_traits::int::PrimInt;
 use num_traits::ops::euclid::Euclid;
 use num_traits::sign::{Signed, Unsigned};
