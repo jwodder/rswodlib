@@ -1,6 +1,6 @@
+use self::inner::Receiver as _;
 use futures::future::{maybe_done, MaybeDone};
 use futures::stream::Stream;
-use inner::Receiver as _;
 use pin_project_lite::pin_project;
 use std::future::Future;
 use std::marker::PhantomData;
