@@ -12,8 +12,11 @@ publish = false
 [dependencies]
 automod = "1.0.8"
 bstr = { version = "1.4.0", default-features = false, features = ["std"] }
+futures = { version = "0.3.28", default-features = false, optional = true }
 num-traits = "0.2.15"
+pin-project-lite = { version = "0.2.9", optional = true }
 thiserror = "1.0.40"
+tokio = { version = "1.28.2", features = ["sync"], optional = true }
 
 [build-dependencies]
 rustc_version = "0.4.0"
@@ -22,3 +25,7 @@ rustc_version = "0.4.0"
 assert_fs = "1.0.13"
 predicates = "3.0.3"
 rstest = { version = "0.17.0", default-features = false }
+tokio = { version = "1.28.2", features = ["io-util", "macros", "rt"] }
+
+[features]
+tokio = ["dep:futures", "dep:pin-project-lite", "dep:tokio"]
