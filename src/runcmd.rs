@@ -128,14 +128,14 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn test_readcmd() {
-        let out = readcmd("printf", [r#"  This text will be stripped.\n\n"#]).unwrap();
+        let out = readcmd("printf", [r"  This text will be stripped.\n\n"]).unwrap();
         assert_eq!(out, "This text will be stripped.");
     }
 
     #[cfg(unix)]
     #[test]
     fn readcmd_non_utf8() {
-        let r = readcmd("printf", [r#"The byte \200 is not valid UTF-8.\n"#]);
+        let r = readcmd("printf", [r"The byte \200 is not valid UTF-8.\n"]);
         let Err(ReadcmdError::Decode(_)) = r else {
             panic!("Command did not fail on decoding output: {r:?}");
         };
@@ -144,10 +144,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn readcmd_bad_exit() {
-        let r = readcmd(
-            "sh",
-            ["-c", r#"printf 'This will be discarded.\n'; exit 23"#],
-        );
+        let r = readcmd("sh", ["-c", r"printf 'This will be discarded.\n'; exit 23"]);
         let Err(ReadcmdError::Exit(rc)) = r else {
             panic!("Command did not exit nonzero: {r:?}");
         };
@@ -165,24 +162,21 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn test_readcmd_lossy() {
-        let out = readcmd_lossy("printf", [r#"  This text will be stripped.\n\n"#]).unwrap();
+        let out = readcmd_lossy("printf", [r"  This text will be stripped.\n\n"]).unwrap();
         assert_eq!(out, "This text will be stripped.");
     }
 
     #[cfg(unix)]
     #[test]
     fn readcmd_lossy_non_utf8() {
-        let out = readcmd_lossy("printf", [r#"The byte \200 is not valid UTF-8.\n"#]).unwrap();
+        let out = readcmd_lossy("printf", [r"The byte \200 is not valid UTF-8.\n"]).unwrap();
         assert_eq!(out, "The byte \u{FFFD} is not valid UTF-8.");
     }
 
     #[cfg(unix)]
     #[test]
     fn readcmd_lossy_bad_exit() {
-        let r = readcmd_lossy(
-            "sh",
-            ["-c", r#"printf 'This will be discarded.\n'; exit 23"#],
-        );
+        let r = readcmd_lossy("sh", ["-c", r"printf 'This will be discarded.\n'; exit 23"]);
         let Err(RuncmdError::Exit(rc)) = r else {
             panic!("Command did not exit nonzero: {r:?}");
         };
