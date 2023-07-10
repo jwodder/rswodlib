@@ -24,7 +24,7 @@ rustc_version = "0.4.0"
 [dev-dependencies]
 assert_fs = "1.0.13"
 predicates = "3.0.3"
-rstest = { version = "0.17.0", default-features = false }
+rstest = { version = "0.18.1", default-features = false }
 tokio = { version = "1.28.2", features = ["io-util", "macros", "rt"] }
 
 [features]
