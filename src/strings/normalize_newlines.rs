@@ -11,7 +11,10 @@ pub fn normalize_newlines(s: &str) -> Cow<'_, str> {
                 b.push_str(&s[..i]);
                 buffer = Some(b);
             }
-            buffer.as_mut().unwrap().push('\n');
+            buffer
+                .as_mut()
+                .expect("buffer should be non-None")
+                .push('\n');
             cr_prev = true;
         } else {
             if !(cr_prev && ch == '\n') {
