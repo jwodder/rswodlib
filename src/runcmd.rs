@@ -1,5 +1,5 @@
 use super::strings::trim_string::trim_string;
-use bstr::ByteVec;
+use bstr::ByteVec; // into_string_lossy()
 use std::ffi::OsStr;
 use std::process::{Command, ExitStatus, Stdio};
 use std::str;
