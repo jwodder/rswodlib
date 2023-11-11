@@ -1,4 +1,4 @@
-use std::iter::{DoubleEndedIterator, FusedIterator};
+use std::iter::FusedIterator;
 
 /// Like [`str::lines`], except the terminating newlines are retained, and a
 /// lone CR is also treated as a newline sequence.
