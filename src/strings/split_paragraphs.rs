@@ -1,9 +1,9 @@
-use std::iter::{DoubleEndedIterator, FusedIterator};
+use std::iter::FusedIterator;
 
-/// Split a string into paragraphs, each one terminated by two or more newline
-/// sequences (LF, CR LF, or CR).  A single newline sequence at the start of a
-/// string is a paragraph by itself.  Trailing and embedded line endings in
-/// each paragraph are retained.
+/// Split a string into paragraphs, each one terminated by two or more
+/// consecutive newline sequences (LF, CR LF, or CR).  A single newline
+/// sequence at the start of a string is a paragraph by itself.  Trailing and
+/// embedded newline sequences in each paragraph are retained.
 pub fn split_paragraphs(s: &str) -> SplitParagraphs<'_> {
     SplitParagraphs(s)
 }
