@@ -1,5 +1,5 @@
-/// Return the concatenation of all elements of `iter` with a linefeed inserted
-/// after each element
+/// Return the concatenation of the elements of `iter` with a linefeed inserted
+/// after each one
 pub fn unlines<I, S>(iter: I) -> String
 where
     I: IntoIterator<Item = S>,
