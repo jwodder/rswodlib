@@ -1,3 +1,4 @@
+use super::newlines::newlines;
 use std::iter::FusedIterator;
 
 /// Like [`str::lines`], except the terminating newlines are retained, and a
@@ -46,14 +47,8 @@ impl<'a> Iterator for LinesKeepends<'a> {
         if self.0.is_empty() {
             return None;
         }
-        let pos = match self.0.find(['\n', '\r']) {
-            Some(i) => {
-                if self.0.get(i..(i + 2)) == Some("\r\n") {
-                    i + 2
-                } else {
-                    i + 1
-                }
-            }
+        let pos = match newlines(self.0).next() {
+            Some((_, end)) => end,
             None => self.0.len(),
         };
         let (s1, s2) = self.0.split_at(pos);
@@ -70,13 +65,11 @@ impl<'a> DoubleEndedIterator for LinesKeepends<'a> {
             return None;
         }
         let length = self.0.len();
-        let pos = match self.0.rmatch_indices(['\n', '\r']).find(|&(i, _)| {
-            let dist = length - i;
-            dist > 1 && !(dist == 2 && self.0.get(i..) == Some("\r\n"))
-        }) {
-            Some((i, _)) => i + 1,
-            None => 0,
-        };
+        let pos = newlines(self.0)
+            .rev()
+            .map(|p| p.1)
+            .find(|&end| end != length)
+            .unwrap_or_default();
         let (s1, s2) = self.0.split_at(pos);
         self.0 = s1;
         Some(s2)
