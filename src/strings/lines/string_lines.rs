@@ -1,14 +1,14 @@
+use super::newlines::newlines;
 use std::iter::FusedIterator;
 
-/// Like [`str::lines`], except it consumes a `String` and yields `String`s.
+/// Like [`str::lines`], except it consumes a `String` and yields `String`s,
+/// and a lone CR is also treated as a newline sequence.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct StringLines {
-    content: String,
-}
+pub struct StringLines(String);
 
 impl StringLines {
     pub fn new(content: String) -> StringLines {
-        StringLines { content }
+        StringLines(content)
     }
 }
 
@@ -16,16 +16,19 @@ impl Iterator for StringLines {
     type Item = String;
 
     fn next(&mut self) -> Option<String> {
-        if self.content.is_empty() {
+        if self.0.is_empty() {
             return None;
         }
-        let i = self.content.find('\n').unwrap_or(self.content.len() - 1);
-        let mut line = self.content.drain(0..=i).collect::<String>();
+        let end = newlines(&self.0)
+            .next()
+            .map(|p| p.1)
+            .unwrap_or(self.0.len());
+        let mut line: String = self.0.drain(0..end).collect();
         if line.ends_with('\n') {
             line.pop();
-            if line.ends_with('\r') {
-                line.pop();
-            }
+        }
+        if line.ends_with('\r') {
+            line.pop();
         }
         Some(line)
     }
