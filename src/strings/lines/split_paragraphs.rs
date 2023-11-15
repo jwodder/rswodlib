@@ -1,3 +1,4 @@
+use super::newlines::newlines;
 use std::iter::FusedIterator;
 
 /// Split a string into paragraphs, each one terminated by two or more
@@ -18,39 +19,30 @@ impl<'a> Iterator for SplitParagraphs<'a> {
         if self.0.is_empty() {
             return None;
         }
-        let mut newlines = 0;
-        let mut cr_prev = false;
-        let mut pos: Option<usize> = None;
-        for (i, ch) in self.0.char_indices() {
-            if ch != '\n' && ch != '\r' {
-                if newlines > 1 {
-                    break;
-                } else {
-                    newlines = 0;
-                    cr_prev = false;
-                    pos = None;
-                }
+        let mut nlqty = 0;
+        let mut length = None;
+        let mut at0 = false;
+        for (start, end) in newlines(self.0) {
+            if length == Some(start) {
+                length = Some(end);
+                nlqty += 1;
+            } else if nlqty > 1 || at0 {
+                let (s1, s2) = self.0.split_at(length.unwrap());
+                self.0 = s2;
+                return Some(s1);
             } else {
-                if i == 0 {
-                    // Pretend there was a newline before the start of the
-                    // string so that a single newline at the start will cause
-                    // a new paragraph.
-                    newlines += 1;
-                }
-                if ch == '\r' {
-                    cr_prev = true;
-                }
-                if !(cr_prev && ch == '\n') {
-                    newlines += 1;
-                }
-                if newlines > 1 {
-                    pos = Some(i + 1);
-                }
+                length = Some(end);
+                nlqty = 1;
+                at0 = start == 0;
             }
         }
-        let (s1, s2) = self.0.split_at(pos.unwrap_or(self.0.len()));
-        self.0 = s2;
-        Some(s1)
+        if nlqty > 1 || at0 {
+            let (s1, s2) = self.0.split_at(length.unwrap());
+            self.0 = s2;
+            Some(s1)
+        } else {
+            Some(std::mem::take(&mut self.0))
+        }
     }
 }
 
@@ -61,44 +53,30 @@ impl<'a> DoubleEndedIterator for SplitParagraphs<'a> {
         if self.0.is_empty() {
             return None;
         }
-        let mut newlines = 0;
-        let mut lf_next = false;
-        let mut pos: Option<usize> = None;
-        let mut among_newlines = true;
-        for (i, ch) in self.0.char_indices().rev() {
-            if ch != '\n' && ch != '\r' {
-                if std::mem::replace(&mut among_newlines, false)
-                    && newlines > 1
-                    && pos != Some(self.0.len())
-                {
-                    break;
-                }
-                newlines = 0;
-                lf_next = false;
-                pos = None;
+        let mut nlqty = 0;
+        let mut para_end = None;
+        let mut para_sep_start = None;
+        for (start, end) in newlines(self.0).rev() {
+            if para_sep_start == Some(end) {
+                para_sep_start = Some(start);
+                nlqty += 1;
+            } else if nlqty > 1 && para_end != Some(self.0.len()) {
+                let (s1, s2) = self.0.split_at(para_end.unwrap());
+                self.0 = s1;
+                return Some(s2);
             } else {
-                among_newlines = true;
-                if pos.is_none() {
-                    pos = Some(i + 1);
-                }
-                if ch == '\n' {
-                    lf_next = true;
-                }
-                if !(lf_next && ch == '\r') {
-                    newlines += 1;
-                }
+                para_end = Some(end);
+                para_sep_start = Some(start);
+                nlqty = 1;
             }
         }
-        let length = self.0.len();
-        match (newlines, pos) {
-            (1, Some(1)) if length != 1 => (),
-            (..=1, _) => pos = Some(0),
-            (_, Some(p)) if p == length => pos = Some(0),
-            _ => (),
+        if para_end != Some(self.0.len()) && (nlqty > 1 || para_sep_start == Some(0)) {
+            let (s1, s2) = self.0.split_at(para_end.unwrap());
+            self.0 = s1;
+            Some(s2)
+        } else {
+            Some(std::mem::take(&mut self.0))
         }
-        let (s1, s2) = self.0.split_at(pos.unwrap_or(0));
-        self.0 = s1;
-        Some(s2)
     }
 }
 
