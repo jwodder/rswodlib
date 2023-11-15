@@ -20,14 +20,10 @@ impl<'a> Iterator for SplitParagraphs<'a> {
             return None;
         }
         let mut tracker = Tracker::new();
-        for span in newlines(self.0) {
-            if let Some(pos) = tracker.handle(span) {
-                let (s1, s2) = self.0.split_at(pos);
-                self.0 = s2;
-                return Some(s1);
-            }
-        }
-        let pos = tracker.end().unwrap_or(self.0.len());
+        let pos = newlines(self.0)
+            .find_map(|span| tracker.handle(span))
+            .or_else(|| tracker.end())
+            .unwrap_or(self.0.len());
         let (s1, s2) = self.0.split_at(pos);
         self.0 = s2;
         Some(s1)
@@ -42,14 +38,11 @@ impl<'a> DoubleEndedIterator for SplitParagraphs<'a> {
             return None;
         }
         let mut tracker = RevTracker::new(self.0);
-        for span in newlines(self.0).rev() {
-            if let Some(pos) = tracker.handle(span) {
-                let (s1, s2) = self.0.split_at(pos);
-                self.0 = s1;
-                return Some(s2);
-            }
-        }
-        let pos = tracker.end().unwrap_or_default();
+        let pos = newlines(self.0)
+            .rev()
+            .find_map(|span| tracker.handle(span))
+            .or_else(|| tracker.end())
+            .unwrap_or_default();
         let (s1, s2) = self.0.split_at(pos);
         self.0 = s1;
         Some(s2)
