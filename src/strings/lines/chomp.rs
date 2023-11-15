@@ -3,7 +3,7 @@
 /// # Example
 ///
 /// ```
-/// # use rswodlib::strings::chomp::chomp;
+/// # use rswodlib::strings::lines::chomp::chomp;
 /// assert_eq!(chomp("foo\r\n"), "foo");
 /// assert_eq!(chomp("foo\n\n"), "foo\n");
 /// ```

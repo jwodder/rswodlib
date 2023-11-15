@@ -8,7 +8,7 @@ use std::iter::FusedIterator;
 /// Basic usage:
 ///
 /// ```
-/// # use rswodlib::strings::lines_keepends::lines_keepends;
+/// # use rswodlib::strings::lines::lines_keepends::lines_keepends;
 /// let text = "foo\r\nbar\n\rbaz\n";
 /// let mut lines = lines_keepends(text);
 ///
@@ -22,7 +22,7 @@ use std::iter::FusedIterator;
 /// The final line ending isn't required:
 ///
 /// ```
-/// # use rswodlib::strings::lines_keepends::lines_keepends;
+/// # use rswodlib::strings::lines::lines_keepends::lines_keepends;
 /// let text = "foo\nbar\n\r\nbaz";
 /// let mut lines = lines_keepends(text);
 ///
