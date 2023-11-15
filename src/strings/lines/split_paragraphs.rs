@@ -19,30 +19,18 @@ impl<'a> Iterator for SplitParagraphs<'a> {
         if self.0.is_empty() {
             return None;
         }
-        let mut nlqty = 0;
-        let mut length = None;
-        let mut at0 = false;
-        for (start, end) in newlines(self.0) {
-            if length == Some(start) {
-                length = Some(end);
-                nlqty += 1;
-            } else if nlqty > 1 || at0 {
-                let (s1, s2) = self.0.split_at(length.unwrap());
+        let mut tracker = Tracker::new();
+        for span in newlines(self.0) {
+            if let Some(pos) = tracker.handle(span) {
+                let (s1, s2) = self.0.split_at(pos);
                 self.0 = s2;
                 return Some(s1);
-            } else {
-                length = Some(end);
-                nlqty = 1;
-                at0 = start == 0;
             }
         }
-        if nlqty > 1 || at0 {
-            let (s1, s2) = self.0.split_at(length.unwrap());
-            self.0 = s2;
-            Some(s1)
-        } else {
-            Some(std::mem::take(&mut self.0))
-        }
+        let pos = tracker.end().unwrap_or(self.0.len());
+        let (s1, s2) = self.0.split_at(pos);
+        self.0 = s2;
+        Some(s1)
     }
 }
 
@@ -53,30 +41,107 @@ impl<'a> DoubleEndedIterator for SplitParagraphs<'a> {
         if self.0.is_empty() {
             return None;
         }
-        let mut nlqty = 0;
-        let mut para_end = None;
-        let mut para_sep_start = None;
-        for (start, end) in newlines(self.0).rev() {
-            if para_sep_start == Some(end) {
-                para_sep_start = Some(start);
-                nlqty += 1;
-            } else if nlqty > 1 && para_end != Some(self.0.len()) {
-                let (s1, s2) = self.0.split_at(para_end.unwrap());
+        let mut tracker = RevTracker::new(self.0);
+        for span in newlines(self.0).rev() {
+            if let Some(pos) = tracker.handle(span) {
+                let (s1, s2) = self.0.split_at(pos);
                 self.0 = s1;
                 return Some(s2);
-            } else {
-                para_end = Some(end);
-                para_sep_start = Some(start);
-                nlqty = 1;
             }
         }
-        if para_end != Some(self.0.len()) && (nlqty > 1 || para_sep_start == Some(0)) {
-            let (s1, s2) = self.0.split_at(para_end.unwrap());
-            self.0 = s1;
-            Some(s2)
-        } else {
-            Some(std::mem::take(&mut self.0))
+        let pos = tracker.end().unwrap_or_default();
+        let (s1, s2) = self.0.split_at(pos);
+        self.0 = s1;
+        Some(s2)
+    }
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+struct Tracker(Option<TrackerState>);
+
+impl Tracker {
+    fn new() -> Tracker {
+        Tracker(None)
+    }
+
+    fn handle(&mut self, (start, end): (usize, usize)) -> Option<usize> {
+        let ending = self.end();
+        match (&mut self.0, ending) {
+            (Some(st), _) if st.para_sep_end == start => {
+                st.para_sep_end = end;
+                st.newlines += 1;
+                None
+            }
+            (_, r @ Some(_)) => r,
+            (st, _) => {
+                *st = Some(TrackerState {
+                    para_sep_start: start,
+                    para_sep_end: end,
+                    newlines: 1,
+                });
+                None
+            }
         }
+    }
+
+    fn end(&self) -> Option<usize> {
+        self.0
+            .filter(|st| st.is_para_ending())
+            .map(|st| st.para_sep_end)
+    }
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+struct RevTracker {
+    state: Option<TrackerState>,
+    strlen: usize,
+}
+
+impl RevTracker {
+    fn new(s: &str) -> RevTracker {
+        RevTracker {
+            state: None,
+            strlen: s.len(),
+        }
+    }
+
+    fn handle(&mut self, (start, end): (usize, usize)) -> Option<usize> {
+        let ending = self.end();
+        match (&mut self.state, ending) {
+            (Some(st), _) if st.para_sep_start == end => {
+                st.para_sep_start = start;
+                st.newlines += 1;
+                None
+            }
+            (_, r @ Some(_)) => r,
+            (st, _) => {
+                *st = Some(TrackerState {
+                    para_sep_start: start,
+                    para_sep_end: end,
+                    newlines: 1,
+                });
+                None
+            }
+        }
+    }
+
+    fn end(&self) -> Option<usize> {
+        self.state
+            .filter(|st| st.is_para_ending() && st.para_sep_end != self.strlen)
+            .map(|st| st.para_sep_end)
+    }
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+struct TrackerState {
+    para_sep_start: usize,
+    para_sep_end: usize,
+    newlines: usize,
+}
+
+impl TrackerState {
+    fn is_para_ending(&self) -> bool {
+        self.newlines > 1 || self.para_sep_start == 0
     }
 }
 
