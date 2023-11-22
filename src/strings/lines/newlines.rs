@@ -18,7 +18,7 @@ impl<'a> Newlines<'a> {
     }
 }
 
-impl<'a> Iterator for Newlines<'a> {
+impl Iterator for Newlines<'_> {
     type Item = (usize, usize);
 
     fn next(&mut self) -> Option<(usize, usize)> {
@@ -37,7 +37,7 @@ impl<'a> Iterator for Newlines<'a> {
     }
 }
 
-impl<'a> DoubleEndedIterator for Newlines<'a> {
+impl DoubleEndedIterator for Newlines<'_> {
     fn next_back(&mut self) -> Option<(usize, usize)> {
         let penult = self.s.rfind(['\n', '\r'])?;
         let end = penult + 1;
@@ -50,7 +50,7 @@ impl<'a> DoubleEndedIterator for Newlines<'a> {
     }
 }
 
-impl<'a> FusedIterator for Newlines<'a> {}
+impl FusedIterator for Newlines<'_> {}
 
 #[cfg(test)]
 mod tests {

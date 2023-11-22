@@ -70,7 +70,7 @@ where
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<T>> {
         let this = self.project();
-        let fut_poll = this.future.poll(cx).map(|_| None);
+        let fut_poll = this.future.poll(cx).map(|()| None);
         let recv_poll = this.receiver.poll_next_recv(cx);
         if recv_poll.is_pending() {
             fut_poll

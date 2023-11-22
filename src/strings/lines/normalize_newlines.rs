@@ -7,7 +7,7 @@ pub fn normalize_newlines(s: &str) -> Cow<'_, str> {
     let mut cr_seen = false;
     let mut i = 0;
     for (start, end) in newlines(s) {
-        cr_seen |= &s[start..(start + 1)] == "\r";
+        cr_seen |= &s[start..=start] == "\r";
         if cr_seen {
             let b = buffer.get_or_insert_with(|| String::with_capacity(s.len()));
             b.push_str(&s[i..start]);

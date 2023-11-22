@@ -8,8 +8,8 @@ pub struct Quantify<'a> {
     ending: &'static str,
 }
 
-impl<'a> fmt::Display for Quantify<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl fmt::Display for Quantify<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{} {}{}", self.qty, self.word, self.ending)
     }
 }

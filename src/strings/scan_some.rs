@@ -16,8 +16,7 @@ pub fn scan_some<P: FnMut(char) -> bool>(s: &str, mut predicate: P) -> Option<(&
     let boundary = s
         .char_indices()
         .find(move |&(_, ch)| !predicate(ch))
-        .map(|(i, _)| i)
-        .unwrap_or_else(|| s.len());
+        .map_or(s.len(), |(i, _)| i);
     (boundary > 0).then(|| s.split_at(boundary))
 }
 

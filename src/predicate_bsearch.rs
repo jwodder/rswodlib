@@ -62,6 +62,8 @@ struct BinsearchBounds {
 }
 
 impl BinsearchBounds {
+    // We need to be lazy in order to avoid underflow
+    #[allow(clippy::unnecessary_lazy_evaluations)]
     fn midpoint(&self) -> Option<usize> {
         let low = match self.start {
             Bound::Included(b) => b,
@@ -73,11 +75,7 @@ impl BinsearchBounds {
             Bound::Excluded(b) => b.checked_sub(1)?,
             Bound::Unbounded => usize::MAX,
         };
-        if low <= high {
-            Some(low + (high - low) / 2)
-        } else {
-            None
-        }
+        (low <= high).then(|| low + (high - low) / 2)
     }
 
     fn above(self, midpoint: usize) -> Self {

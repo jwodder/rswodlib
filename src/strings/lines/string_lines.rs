@@ -19,10 +19,7 @@ impl Iterator for StringLines {
         if self.0.is_empty() {
             return None;
         }
-        let end = newlines(&self.0)
-            .next()
-            .map(|p| p.1)
-            .unwrap_or(self.0.len());
+        let end = newlines(&self.0).next().map_or(self.0.len(), |p| p.1);
         let mut line: String = self.0.drain(0..end).collect();
         if line.ends_with('\n') {
             line.pop();

@@ -4,8 +4,7 @@ use std::ops::{Div, Rem};
 // cf. `div_rem()` and `Integer::div_rem()` from the `num` crate
 pub fn divmod<T>(dividend: T, divisor: T) -> (T, T)
 where
-    T: Div<Output = T> + Copy,
-    T: Rem<Output = T> + Copy,
+    T: Div<Output = T> + Rem<Output = T> + Copy,
 {
     (dividend / divisor, dividend % divisor)
 }

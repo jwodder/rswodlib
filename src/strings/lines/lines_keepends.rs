@@ -37,7 +37,7 @@ pub fn lines_keepends(s: &str) -> LinesKeepends<'_> {
     LinesKeepends(s)
 }
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct LinesKeepends<'a>(&'a str);
 
 impl<'a> Iterator for LinesKeepends<'a> {
@@ -57,7 +57,7 @@ impl<'a> Iterator for LinesKeepends<'a> {
     }
 }
 
-impl<'a> FusedIterator for LinesKeepends<'a> {}
+impl FusedIterator for LinesKeepends<'_> {}
 
 impl<'a> DoubleEndedIterator for LinesKeepends<'a> {
     fn next_back(&mut self) -> Option<&'a str> {

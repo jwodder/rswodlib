@@ -89,7 +89,7 @@ impl<R: BufRead> Iterator for Paragraphs<R> {
                     }
                 }
             }
-            State::Done(opt) => opt.take().map(Result::Err),
+            State::Done(opt) => opt.take().map(Err),
         }
     }
 }

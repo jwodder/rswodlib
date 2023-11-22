@@ -16,8 +16,7 @@ pub fn rscan<P: FnMut(char) -> bool>(s: &str, mut predicate: P) -> (&str, &str) 
         .rev()
         .take_while(move |&(_, ch)| predicate(ch))
         .last()
-        .map(|(i, _)| i)
-        .unwrap_or_else(|| s.len());
+        .map_or(s.len(), |(i, _)| i);
     s.split_at(boundary)
 }
 

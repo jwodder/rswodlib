@@ -9,7 +9,7 @@ pub fn split_paragraphs(s: &str) -> SplitParagraphs<'_> {
     SplitParagraphs(s)
 }
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct SplitParagraphs<'a>(&'a str);
 
 impl<'a> Iterator for SplitParagraphs<'a> {
@@ -30,7 +30,7 @@ impl<'a> Iterator for SplitParagraphs<'a> {
     }
 }
 
-impl<'a> FusedIterator for SplitParagraphs<'a> {}
+impl FusedIterator for SplitParagraphs<'_> {}
 
 impl<'a> DoubleEndedIterator for SplitParagraphs<'a> {
     fn next_back(&mut self) -> Option<&'a str> {
@@ -79,7 +79,7 @@ impl Tracker {
 
     fn end(&self) -> Option<usize> {
         self.0
-            .filter(|st| st.is_para_ending())
+            .filter(TrackerState::is_para_ending)
             .map(|st| st.para_sep_end)
     }
 }
