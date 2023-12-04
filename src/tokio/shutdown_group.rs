@@ -7,6 +7,12 @@ use tokio_util::sync::CancellationToken;
 
 #[derive(Debug, Default)]
 pub struct ShutdownGroup {
+    // Replacing `FuturesUnordered<JoinHandle<()>>` with a
+    // `tokio::task::JoinSet` would require the `ShutdownGroup` to be mutable,
+    // which would make using one from multiple tasks at once more complicated.
+    // (Also, the usual footguns around `FuturesUnordered` don't apply here, as
+    // the actual tasks are constantly being polled by the tokio executor
+    // rather than only being polled when `FuturesUnordered` is polled.)
     handles: FuturesUnordered<JoinHandle<()>>,
     token: CancellationToken,
 }
