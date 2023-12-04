@@ -1,26 +1,18 @@
-use futures_util::stream::{FuturesUnordered, StreamExt};
 use std::future::Future;
 use std::time::Duration;
-use tokio::task::JoinHandle;
 use tokio::time::timeout;
-use tokio_util::sync::CancellationToken;
+use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 #[derive(Debug, Default)]
 pub struct ShutdownGroup {
-    // Replacing `FuturesUnordered<JoinHandle<()>>` with a
-    // `tokio::task::JoinSet` would require the `ShutdownGroup` to be mutable,
-    // which would make using one from multiple tasks at once more complicated.
-    // (Also, the usual footguns around `FuturesUnordered` don't apply here, as
-    // the actual tasks are constantly being polled by the tokio executor
-    // rather than only being polled when `FuturesUnordered` is polled.)
-    handles: FuturesUnordered<JoinHandle<()>>,
+    tracker: TaskTracker,
     token: CancellationToken,
 }
 
 impl ShutdownGroup {
     pub fn new() -> Self {
         ShutdownGroup {
-            handles: FuturesUnordered::new(),
+            tracker: TaskTracker::new(),
             token: CancellationToken::new(),
         }
     }
@@ -28,14 +20,16 @@ impl ShutdownGroup {
     pub fn spawn<F, Fut>(&self, func: F)
     where
         F: FnOnce(CancellationToken) -> Fut,
-        Fut: Future<Output = ()> + Send + 'static,
+        Fut: Future + Send + 'static,
+        Fut::Output: Send + 'static,
     {
         let future = func(self.token.clone());
-        self.handles.push(tokio::spawn(future));
+        self.tracker.spawn(future);
     }
 
     async fn join(&mut self) {
-        while self.handles.next().await.is_some() {}
+        self.tracker.close();
+        self.tracker.wait().await;
     }
 
     pub async fn shutdown(mut self, duration: Duration) {
