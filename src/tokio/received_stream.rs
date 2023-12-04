@@ -1,6 +1,8 @@
 use self::inner::Receiver as _;
-use futures::future::{maybe_done, MaybeDone};
-use futures::stream::Stream;
+use futures_util::{
+    future::{maybe_done, MaybeDone},
+    stream::Stream,
+};
 use pin_project_lite::pin_project;
 use std::future::Future;
 use std::marker::PhantomData;
@@ -132,7 +134,7 @@ mod inner {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use futures::stream::StreamExt;
+    use futures_util::stream::StreamExt;
     use std::io::Cursor;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;

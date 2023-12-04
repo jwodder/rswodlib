@@ -12,7 +12,7 @@ publish = false
 [dependencies]
 automod = "1.0.8"
 bstr = { version = "1.4.0", default-features = false, features = ["std"] }
-futures = { version = "0.3.28", default-features = false, features = ["std"], optional = true }
+futures-util = { version = "0.3.29", default-features = false, features = ["std"], optional = true }
 log = "0.4.20"
 num-traits = "0.2.15"
 pin-project-lite = { version = "0.2.9", optional = true }
@@ -31,7 +31,7 @@ tokio = { version = "1.28.2", features = ["io-util", "macros"] }
 rustc_version = "0.4.0"
 
 [features]
-tokio = ["dep:futures", "dep:pin-project-lite", "dep:tokio", "dep:tokio-util"]
+tokio = ["dep:futures-util", "dep:pin-project-lite", "dep:tokio", "dep:tokio-util"]
 
 [lints.rust]
 # Lint groups:

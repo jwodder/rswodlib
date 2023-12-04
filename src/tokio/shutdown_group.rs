@@ -1,4 +1,4 @@
-use futures::stream::{FuturesUnordered, StreamExt};
+use futures_util::stream::{FuturesUnordered, StreamExt};
 use std::future::Future;
 use std::time::Duration;
 use tokio::task::JoinHandle;
@@ -60,7 +60,7 @@ mod tests {
         group.spawn(|token| async move {
             tokio::select! {
                 () = token.cancelled() => (),
-                () = futures::future::ready(()) => my_finished.store(true, Ordering::Release),
+                () = futures_util::future::ready(()) => my_finished.store(true, Ordering::Release),
             }
         });
         let task2_cancelled = Arc::new(AtomicBool::new(false));
