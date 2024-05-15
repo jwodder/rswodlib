@@ -45,6 +45,7 @@ where
 }
 
 pin_project! {
+    #[must_use = "streams do nothing unless polled"]
     pub struct ReceivedStream<Fut, T, Recv> where Fut: Future {
         #[pin]
         future: MaybeDone<Fut>,
@@ -108,6 +109,7 @@ mod inner {
         }
     }
 
+    #[derive(Clone, Debug, Eq, PartialEq)]
     pub(super) enum MaybeAllReceived<Recv> {
         InProgress(Recv),
         Done,

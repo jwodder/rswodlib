@@ -26,6 +26,7 @@ type UnwindResult<T> = Result<T, Box<dyn std::any::Any + Send>>;
 ///
 /// - Dropping `BoundedTreeNursery` causes all tasks to be aborted.
 #[derive(Debug)]
+#[must_use = "streams do nothing unless polled"]
 pub struct BoundedTreeNursery<T> {
     receiver: UnboundedReceiver<UnwindResult<T>>,
     _on_drop: DropGuard,

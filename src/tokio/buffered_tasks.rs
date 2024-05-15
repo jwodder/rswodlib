@@ -9,6 +9,7 @@ use tokio::{sync::Semaphore, task::JoinSet};
 /// spawned on the tokio executor for continuous polling instead of only being
 /// polled when the stream is polled
 #[derive(Debug)]
+#[must_use = "streams do nothing unless polled"]
 pub struct BufferedTasks<T> {
     tasks: JoinSet<T>,
     semaphore: Arc<Semaphore>,
