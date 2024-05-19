@@ -15,7 +15,7 @@ bstr = { version = "1.4.0", default-features = false, features = ["std"] }
 futures-util = { version = "0.3.29", default-features = false, features = ["std"], optional = true }
 log = "0.4.20"
 num-traits = "0.2.15"
-pin-project-lite = { version = "0.2.9", optional = true }
+pin-project-lite = { version = "0.2.11", optional = true }
 shell-words = "1.1.0"
 thiserror = "1.0.40"
 tokio = { version = "1.28.2", features = ["sync", "time"], optional = true }
