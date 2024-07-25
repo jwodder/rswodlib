@@ -17,10 +17,7 @@ use std::str::pattern::Pattern;
 /// assert_eq!(partition("abc.123-xyz", ['-', '.']), Some(("abc", ".", "123-xyz")));
 /// assert_eq!(partition("abc_123_xyz", ['-', '.']), None);
 /// ```
-pub fn partition<'a, P: Pattern<'a>>(
-    s: &'a str,
-    pattern: P,
-) -> Option<(&'a str, &'a str, &'a str)> {
+pub fn partition<P: Pattern>(s: &str, pattern: P) -> Option<(&str, &str, &str)> {
     let (i, sep) = s.match_indices(pattern).next()?;
     Some((&s[..i], sep, &s[(i + sep.len())..]))
 }
