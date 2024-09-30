@@ -28,7 +28,7 @@ rstest = { version = "0.23.0", default-features = false }
 tokio = { version = "1.29.0", features = ["io-util", "macros", "rt"] }
 
 [build-dependencies]
-rustc_version = "0.4.0"
+rustc_version = "0.4.1"
 
 [features]
 tokio = ["dep:futures-util", "dep:pin-project-lite", "dep:tokio", "dep:tokio-util"]
