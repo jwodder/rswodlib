@@ -1,5 +1,10 @@
 use std::cmp::Ordering;
 
+/// Compares `value` to `lower` and `upper`, where `lower <= upper`, and
+/// reports on where `value` falls with respect to the range.
+///
+/// See [`RangeOrdering`] for the recognized possibilities.
+///
 /// # Panics
 ///
 /// Panics if `lower > upper`
@@ -19,13 +24,20 @@ pub fn cmp_range<T: Ord + std::fmt::Debug>(value: T, lower: T, upper: T) -> Rang
     }
 }
 
+/// Return type of [`cmp_range()`]
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub enum RangeOrdering {
+    /// Returned when `value` is less than `lower`
     Less,
+    /// Returned when `value` equals `lower` and is less than `upper`
     EqLower,
+    /// Returned when `value` is between `lower` and `upper`
     Between,
+    /// Returned when `value` equals both `lower` and `upper`
     EqBoth,
+    /// Returned when `value` equals `upper` and is greater than `lower`
     EqUpper,
+    /// Returned when `value` is greater than `upper`
     Greater,
 }
 
