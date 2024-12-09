@@ -6,11 +6,11 @@
 /// # Example
 ///
 /// ```
-/// # use rswodlib::strings::scan::scan;
-/// assert_eq!(scan("123abc", |c| c.is_ascii_digit()), ("123", "abc"));
-/// assert_eq!(scan("abc123", |c| c.is_ascii_digit()), ("", "abc123"));
+/// # use rswodlib::strings::span::span;
+/// assert_eq!(span("123abc", |c| c.is_ascii_digit()), ("123", "abc"));
+/// assert_eq!(span("abc123", |c| c.is_ascii_digit()), ("", "abc123"));
 /// ```
-pub fn scan<P: FnMut(char) -> bool>(s: &str, mut predicate: P) -> (&str, &str) {
+pub fn span<P: FnMut(char) -> bool>(s: &str, mut predicate: P) -> (&str, &str) {
     let boundary = s
         .char_indices()
         .find(move |&(_, ch)| !predicate(ch))
@@ -24,16 +24,16 @@ mod tests {
 
     #[test]
     fn half() {
-        assert_eq!(scan("123abc", |c| c.is_ascii_digit()), ("123", "abc"));
+        assert_eq!(span("123abc", |c| c.is_ascii_digit()), ("123", "abc"));
     }
 
     #[test]
     fn all() {
-        assert_eq!(scan("123456", |c| c.is_ascii_digit()), ("123456", ""));
+        assert_eq!(span("123456", |c| c.is_ascii_digit()), ("123456", ""));
     }
 
     #[test]
     fn none() {
-        assert_eq!(scan("abc123", |c| c.is_ascii_digit()), ("", "abc123"));
+        assert_eq!(span("abc123", |c| c.is_ascii_digit()), ("", "abc123"));
     }
 }
