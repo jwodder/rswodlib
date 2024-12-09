@@ -1,6 +1,20 @@
 use std::fmt::{self, Write};
 use std::time::Duration;
 
+/// Returns a structure that displays the given [`Duration`] as a
+/// floating-point number of seconds using no more precision than is necessary.
+///
+/// # Example
+///
+/// ```
+/// # use rswodlib::show_duration::show_duration_as_seconds;
+/// # use std::time::Duration;
+/// let d1 = Duration::from_secs(42);
+/// assert_eq!(show_duration_as_seconds(d1).to_string(), "42");
+///
+/// let d2 = Duration::from_nanos(123_000_000);
+/// assert_eq!(show_duration_as_seconds(d2).to_string(), "0.123");
+/// ```
 pub fn show_duration_as_seconds(d: Duration) -> ShowDurationAsSeconds {
     ShowDurationAsSeconds(d)
 }
