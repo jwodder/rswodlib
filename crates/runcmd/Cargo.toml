@@ -1,0 +1,19 @@
+[package]
+name = "rswodlib-runcmd"
+edition.workspace = true
+#description = ...
+authors.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+bstr = { version = "1.4.0", default-features = false, features = ["std"] }
+rswodlib = { path = "../.." }
+thiserror = "2.0.0"
+
+[dev-dependencies]
+assert_fs = "1.0.13"
+predicates = "3.0.3"
+
+[lints]
+workspace = true

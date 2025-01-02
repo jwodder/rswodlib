@@ -1,0 +1,15 @@
+[package]
+name = "rswodlib-loggedcmd"
+edition.workspace = true
+#description = ...
+authors.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+log = "0.4.20"
+shell-words = "1.1.0"
+thiserror = "2.0.0"
+
+[lints]
+workspace = true

@@ -1,0 +1,15 @@
+[package]
+name = "rswodlib-tokio-lsg"
+edition.workspace = true
+#description = ...
+authors.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+futures-util = { version = "0.3.29", default-features = false, features = ["std"] }
+tokio = { version = "1.29.0", features = ["sync"] }
+tokio-util = { version = "0.7.10", features = ["rt"] }
+
+[lints]
+workspace = true

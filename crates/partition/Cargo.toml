@@ -1,0 +1,15 @@
+[package]
+name = "rswodlib-partition"
+edition.workspace = true
+#description = ...
+authors.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+
+[build-dependencies]
+rustc_version = "0.4.1"
+
+[lints]
+workspace = true

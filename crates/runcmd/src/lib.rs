@@ -1,5 +1,5 @@
-use crate::strings::trim_string::trim_string;
 use bstr::ByteVec; // into_string_lossy()
+use rswodlib::strings::trim_string::trim_string;
 use std::ffi::OsStr;
 use std::process::{Command, ExitStatus, Stdio};
 use std::str;
@@ -112,8 +112,7 @@ mod tests {
     #[cfg(unix)]
     mod unix {
         use super::*;
-        use assert_fs::prelude::*;
-        use assert_fs::NamedTempFile;
+        use assert_fs::{prelude::*, NamedTempFile};
         use predicates::prelude::*;
 
         #[test]
