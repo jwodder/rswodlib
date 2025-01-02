@@ -1,4 +1,5 @@
 #![cfg(nightly)]
+#![feature(pattern)]
 // Requires the "pattern" feature on nightly
 // - `#![feature(pattern)]` must be enabled in the root module
 // - rswodlib is configured to only make use of nightly features when actually
@@ -13,7 +14,7 @@ use std::str::pattern::Pattern;
 /// # Example
 ///
 /// ```
-/// # use rswodlib::strings::partition::partition;
+/// # use rswodlib_partition::partition;
 /// assert_eq!(partition("abc.123-xyz", ['-', '.']), Some(("abc", ".", "123-xyz")));
 /// assert_eq!(partition("abc_123_xyz", ['-', '.']), None);
 /// ```
