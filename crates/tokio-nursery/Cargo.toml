@@ -1,0 +1,17 @@
+[package]
+name = "rswodlib-tokio-nursery"
+edition.workspace = true
+description = "Simple tokio-based task group/nursery"
+authors.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+futures-util = { version = "0.3.29", default-features = false, features = ["std"] }
+tokio = { version = "1.29.0", features = ["rt", "sync"] }
+
+[dev-dependencies]
+tokio = { version = "1.29.0", features = ["macros", "rt"] }
+
+[lints]
+workspace = true
