@@ -14,7 +14,8 @@ sendable, and so it can be used to spawn tasks from within other tasks.
 The `NurseryStream` is a [`Stream`][] of the values returned by the tasks as
 they complete; if a task panics, the panic is propagated.  Once the `Nursery`
 object and all of its clones have been dropped, and once all spawned futures
-have completed, the stream will close.
+have completed, the stream will close.  If the `NurseryStream` is dropped, all
+tasks in the nursery are aborted.
 
 [tokio]: https://tokio.rs
 [`async_nursery`]: https://crates.io/crates/async_nursery
