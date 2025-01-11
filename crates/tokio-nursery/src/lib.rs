@@ -1,12 +1,12 @@
-use futures_util::{FutureExt, Stream};
+use futures_util::{stream::FuturesUnordered, Stream, StreamExt};
+use pin_project_lite::pin_project;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{ready, Context, Poll};
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
-
-/// Type returned by [`FutureExt::catch_unwind()`].  If the inner task ran to
-/// completion, this is `Ok`; otherwise, if the taks panicked, this is `Err`.
-type UnwindResult<T> = Result<T, Box<dyn std::any::Any + Send>>;
+use tokio::{
+    sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
+    task::{JoinError, JoinHandle},
+};
 
 /// A handle for spawning new tasks in a task group/nursery.
 ///
@@ -16,7 +16,7 @@ type UnwindResult<T> = Result<T, Box<dyn std::any::Any + Send>>;
 /// corresponding [`NurseryStream`] can yield `None`.
 #[derive(Debug)]
 pub struct Nursery<T> {
-    sender: UnboundedSender<UnwindResult<T>>,
+    sender: UnboundedSender<FragileHandle<T>>,
 }
 
 impl<T: Send + 'static> Nursery<T> {
@@ -25,7 +25,13 @@ impl<T: Send + 'static> Nursery<T> {
     /// futures that will be spawned in the nursery.
     pub fn new() -> (Nursery<T>, NurseryStream<T>) {
         let (sender, receiver) = unbounded_channel();
-        (Nursery { sender }, NurseryStream { receiver })
+        (
+            Nursery { sender },
+            NurseryStream {
+                receiver,
+                tasks: FuturesUnordered::new(),
+            },
+        )
     }
 
     /// Spawn a future that returns `T` in the nursery.
@@ -33,11 +39,7 @@ impl<T: Send + 'static> Nursery<T> {
     where
         Fut: Future<Output = T> + Send + 'static,
     {
-        let sender = self.sender.clone();
-        tokio::spawn(async move {
-            let task = std::panic::AssertUnwindSafe(fut).catch_unwind();
-            let _ = sender.send(task.await);
-        });
+        let _ = self.sender.send(FragileHandle::new(tokio::spawn(fut)));
     }
 }
 
@@ -55,9 +57,12 @@ impl<T> Clone for Nursery<T> {
 ///
 /// The corresponding [`Nursery`] and all clones thereof must be dropped before
 /// the stream can yield `None`.
+///
+/// When a `NurseryStream` is dropped, all tasks in the nursery are aborted.
 #[derive(Debug)]
 pub struct NurseryStream<T> {
-    receiver: UnboundedReceiver<UnwindResult<T>>,
+    receiver: UnboundedReceiver<FragileHandle<T>>,
+    tasks: FuturesUnordered<FragileHandle<T>>,
 }
 
 impl<T: 'static> Stream for NurseryStream<T> {
@@ -70,18 +75,68 @@ impl<T: 'static> Stream for NurseryStream<T> {
     ///
     /// If a task panics, this method resumes unwinding the panic.
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<T>> {
-        match ready!(self.receiver.poll_recv(cx)) {
+        let closed = loop {
+            match self.receiver.poll_recv(cx) {
+                Poll::Pending => break false,
+                Poll::Ready(Some(handle)) => self.tasks.push(handle),
+                Poll::Ready(None) => break true,
+            }
+        };
+        match ready!(self.tasks.poll_next_unpin(cx)) {
             Some(Ok(r)) => Some(r).into(),
-            Some(Err(e)) => std::panic::resume_unwind(e),
-            None => None.into(),
+            Some(Err(e)) => match e.try_into_panic() {
+                Ok(barf) => std::panic::resume_unwind(barf),
+                Err(e) => unreachable!(
+                    "Task in nursery should not have been aborted before dropping stream, but got {e:?}"
+                ),
+            },
+            None => {
+                if closed {
+                    // All Nursery clones dropped and all results yielded; end
+                    // of stream
+                    None.into()
+                } else {
+                    Poll::Pending
+                }
+            }
         }
+    }
+}
+
+pin_project! {
+    /// A wrapper around `tokio::task::JoinHandle` that aborts the task on drop.
+    #[derive(Debug)]
+    struct FragileHandle<T> {
+        #[pin]
+        inner: JoinHandle<T>
+    }
+
+    impl<T> PinnedDrop for FragileHandle<T> {
+        fn drop(this: Pin<&mut Self>) {
+            this.project().inner.abort();
+        }
+    }
+}
+
+impl<T> FragileHandle<T> {
+    fn new(inner: JoinHandle<T>) -> Self {
+        FragileHandle { inner }
+    }
+}
+
+impl<T> Future for FragileHandle<T> {
+    type Output = Result<T, JoinError>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.project();
+        this.inner.poll(cx)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use futures_util::StreamExt;
+    use futures_util::{FutureExt, StreamExt};
     use std::time::Duration;
     use tokio::time::timeout;
 
