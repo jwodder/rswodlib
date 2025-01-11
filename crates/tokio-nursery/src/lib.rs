@@ -82,6 +82,8 @@ impl<T: 'static> Stream for NurseryStream<T> {
 mod tests {
     use super::*;
     use futures_util::StreamExt;
+    use std::time::Duration;
+    use tokio::time::timeout;
 
     #[test]
     fn nursery_is_send() {
@@ -132,5 +134,24 @@ mod tests {
             .catch_unwind()
             .await;
         assert!(r.is_err());
+    }
+
+    #[tokio::test]
+    async fn no_close_until_drop() {
+        let (nursery, mut nursery_stream) = Nursery::new();
+        nursery.spawn(std::future::ready(1));
+        nursery.spawn(std::future::ready(2));
+        nursery.spawn(std::future::ready(3));
+        let mut values = Vec::new();
+        values.push(nursery_stream.next().await.unwrap());
+        values.push(nursery_stream.next().await.unwrap());
+        values.push(nursery_stream.next().await.unwrap());
+        values.sort_unstable();
+        assert_eq!(values, vec![1, 2, 3]);
+        let r = timeout(Duration::from_millis(100), nursery_stream.next()).await;
+        assert!(r.is_err());
+        drop(nursery);
+        let r = timeout(Duration::from_millis(100), nursery_stream.next()).await;
+        assert_eq!(r, Ok(None));
     }
 }
