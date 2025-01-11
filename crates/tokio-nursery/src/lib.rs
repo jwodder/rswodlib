@@ -137,6 +137,7 @@ impl<T> Future for FragileHandle<T> {
 mod tests {
     use super::*;
     use futures_util::{FutureExt, StreamExt};
+    use std::sync::Arc;
     use std::time::Duration;
     use tokio::time::timeout;
 
@@ -208,5 +209,22 @@ mod tests {
         drop(nursery);
         let r = timeout(Duration::from_millis(100), nursery_stream.next()).await;
         assert_eq!(r, Ok(None));
+    }
+
+    #[tokio::test]
+    async fn drop_tasks_on_drop_stream() {
+        let (nursery, nursery_stream) = Nursery::new();
+        let token = Arc::new(());
+        nursery.spawn({
+            let token = token.clone();
+            async move {
+                std::future::pending::<()>().await;
+                *token;
+            }
+        });
+        drop(nursery);
+        assert_eq!(Arc::strong_count(&token), 2);
+        drop(nursery_stream);
+        assert_eq!(Arc::strong_count(&token), 1);
     }
 }
