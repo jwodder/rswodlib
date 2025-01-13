@@ -226,4 +226,25 @@ mod tests {
         drop(nursery_stream);
         assert!(receiver.await.is_err());
     }
+
+    #[tokio::test]
+    async fn nest_nurseries() {
+        let (nursery, nursery_stream) = Nursery::new();
+        nursery.spawn(async {
+            let (nursery, nursery_stream) = Nursery::new();
+            nursery.spawn(std::future::ready(1));
+            nursery.spawn(std::future::ready(2));
+            nursery.spawn(std::future::ready(3));
+            drop(nursery);
+            nursery_stream
+                .fold(0, |accum, i| async move { accum + i })
+                .await
+        });
+        nursery.spawn(std::future::ready(4));
+        nursery.spawn(std::future::ready(5));
+        drop(nursery);
+        let mut values = nursery_stream.collect::<Vec<_>>().await;
+        values.sort_unstable();
+        assert_eq!(values, vec![4, 5, 6]);
+    }
 }
