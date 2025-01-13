@@ -9,7 +9,8 @@ Usage
 Call `Nursery::new()` to receive a `(Nursery<T>, NurseryStream<T>)` pair, where
 `T` is the output type of the futures that you'll be spawning in the nursery.
 Call `nursery.spawn(future)` to spawn a future.  The nursery is clonable &
-sendable, and so it can be used to spawn tasks from within other tasks.
+sendable, and so it can be used to spawn tasks from within other tasks.  You
+can even create a nursery inside a task of another nursery.
 
 The `NurseryStream` is a [`Stream`][] of the values returned by the tasks as
 they complete; if a task panics, the panic is propagated.  Once the `Nursery`
