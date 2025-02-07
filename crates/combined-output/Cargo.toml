@@ -1,0 +1,13 @@
+[package]
+name = "rswodlib-combined-output"
+edition.workspace = true
+description = "Running a command and capturing combined stdout & stderr"
+authors.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+
+[lints]
+workspace = true
