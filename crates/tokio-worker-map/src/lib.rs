@@ -3,6 +3,7 @@ use std::future::Future;
 use std::num::NonZeroUsize;
 use std::pin::Pin;
 use std::task::{ready, Context, Poll};
+use tokio::task::JoinSet;
 
 type UnwindResult<T> = Result<T, Box<dyn std::any::Any + Send>>;
 
@@ -19,8 +20,9 @@ where
 {
     let (input_sender, input_receiver) = async_channel::bounded(buffer_size.get());
     let (output_sender, output_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let mut tasks = JoinSet::new();
     for _ in 0..workers.get() {
-        tokio::spawn({
+        tasks.spawn({
             let func = func.clone();
             let input = input_receiver.clone();
             let output = output_sender.clone();
@@ -36,7 +38,13 @@ where
             }
         });
     }
-    (Sender(input_sender), Receiver(output_receiver))
+    (
+        Sender(input_sender),
+        Receiver {
+            inner: output_receiver,
+            _tasks: tasks,
+        },
+    )
 }
 
 #[derive(Debug)]
@@ -57,11 +65,14 @@ impl<T> Clone for Sender<T> {
 }
 
 #[derive(Debug)]
-pub struct Receiver<T>(tokio::sync::mpsc::UnboundedReceiver<UnwindResult<T>>);
+pub struct Receiver<T> {
+    inner: tokio::sync::mpsc::UnboundedReceiver<UnwindResult<T>>,
+    _tasks: JoinSet<()>,
+}
 
 impl<T: Send> Receiver<T> {
     pub async fn recv(&mut self) -> Option<T> {
-        match self.0.recv().await? {
+        match self.inner.recv().await? {
             Ok(r) => Some(r),
             Err(e) => std::panic::resume_unwind(e),
         }
@@ -72,7 +83,7 @@ impl<T: 'static> Stream for Receiver<T> {
     type Item = T;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<T>> {
-        match ready!(self.0.poll_recv(cx)) {
+        match ready!(self.inner.poll_recv(cx)) {
             Some(Ok(r)) => Some(r).into(),
             Some(Err(e)) => std::panic::resume_unwind(e),
             None => None.into(),
