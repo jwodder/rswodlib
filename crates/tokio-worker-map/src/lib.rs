@@ -66,6 +66,33 @@ impl<T> Sender<T> {
     pub fn send(&self, msg: T) -> async_channel::Send<'_, T> {
         self.0.send(msg)
     }
+
+    pub fn try_send(&self, msg: T) -> Result<(), async_channel::TrySendError<T>> {
+        self.0.try_send(msg)
+    }
+
+    pub fn is_closed(&self) -> bool {
+        self.0.is_closed()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub fn is_full(&self) -> bool {
+        self.0.is_full()
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn capacity(&self) -> usize {
+        match self.0.capacity() {
+            Some(n) => n,
+            None => unreachable!("channel should be bounded"),
+        }
+    }
 }
 
 // Clone can't be derived, as that would erroneously add `T: Clone` bounds to
@@ -101,6 +128,10 @@ impl<T, U> Receiver<T, U> {
         self.closer.close()
     }
 
+    pub fn is_closed(&self) -> bool {
+        self.closer.is_closed()
+    }
+
     // Returns `true` if `shutdown()` was not already called before
     pub fn shutdown(&self) -> bool {
         self.close();
@@ -112,6 +143,26 @@ impl<T, U> Receiver<T, U> {
                 false
             }
         })
+    }
+
+    pub fn is_shutdown(&self) -> bool {
+        *self.shutdown_sender.borrow()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+
+    pub fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    pub fn poll_recv(&mut self, cx: &mut Context<'_>) -> Poll<Option<U>> {
+        match ready!(self.inner.poll_recv(cx)) {
+            Some(Ok(r)) => Some(r).into(),
+            Some(Err(e)) => std::panic::resume_unwind(e),
+            None => None.into(),
+        }
     }
 }
 
@@ -136,6 +187,10 @@ struct Closer<T>(async_channel::Receiver<T>);
 impl<T> Closer<T> {
     fn close(&self) -> bool {
         self.0.close()
+    }
+
+    fn is_closed(&self) -> bool {
+        self.0.is_closed()
     }
 }
 
@@ -240,8 +295,14 @@ mod tests {
         for i in 0..5 {
             sender.send(i).await.unwrap();
         }
+        assert!(!receiver.is_shutdown());
+        assert!(!receiver.is_closed());
+        assert!(!sender.is_closed());
         assert!(receiver.close());
         assert!(sender.send(5).await.is_err());
+        assert!(!receiver.is_shutdown());
+        assert!(receiver.is_closed());
+        assert!(sender.is_closed());
         drop(sender);
         let mut values = receiver.collect::<Vec<_>>().await;
         values.sort_unstable();
@@ -255,8 +316,14 @@ mod tests {
         for i in 0..5 {
             sender.send(i).await.unwrap();
         }
+        assert!(!receiver.is_shutdown());
+        assert!(!receiver.is_closed());
+        assert!(!sender.is_closed());
         assert!(receiver.shutdown());
         assert!(sender.send(5).await.is_err());
+        assert!(receiver.is_shutdown());
+        assert!(receiver.is_closed());
+        assert!(sender.is_closed());
         drop(sender);
         // Note that, because shutdown() prevents queued tasks from running,
         // the receiver will nondeterministically return a subset of the
