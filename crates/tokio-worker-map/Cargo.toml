@@ -1,7 +1,7 @@
 [package]
 name = "rswodlib-tokio-worker-map"
 edition.workspace = true
-#description = ...
+description = "Map values through asynchronous worker tasks"
 authors.workspace = true
 repository.workspace = true
 license.workspace = true
