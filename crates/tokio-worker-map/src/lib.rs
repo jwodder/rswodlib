@@ -71,6 +71,10 @@ impl<T> Sender<T> {
         self.0.try_send(msg)
     }
 
+    pub fn close(&self) -> bool {
+        self.0.close()
+    }
+
     pub fn is_closed(&self) -> bool {
         self.0.is_closed()
     }
@@ -285,7 +289,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn close() {
+    async fn close_receiver() {
         let workers = NonZeroUsize::new(5).unwrap();
         let (sender, receiver) = worker_map(|n| async move { n + 1 }, workers, workers);
         for i in 0..5 {
@@ -295,6 +299,27 @@ mod tests {
         assert!(!receiver.is_closed());
         assert!(!sender.is_closed());
         assert!(receiver.close());
+        assert!(sender.send(5).await.is_err());
+        assert!(!receiver.is_shutdown());
+        assert!(receiver.is_closed());
+        assert!(sender.is_closed());
+        drop(sender);
+        let mut values = receiver.collect::<Vec<_>>().await;
+        values.sort_unstable();
+        assert_eq!(values, (1..6).collect::<Vec<_>>());
+    }
+
+    #[tokio::test]
+    async fn close_sender() {
+        let workers = NonZeroUsize::new(5).unwrap();
+        let (sender, receiver) = worker_map(|n| async move { n + 1 }, workers, workers);
+        for i in 0..5 {
+            sender.send(i).await.unwrap();
+        }
+        assert!(!receiver.is_shutdown());
+        assert!(!receiver.is_closed());
+        assert!(!sender.is_closed());
+        assert!(sender.close());
         assert!(sender.send(5).await.is_err());
         assert!(!receiver.is_shutdown());
         assert!(receiver.is_closed());
