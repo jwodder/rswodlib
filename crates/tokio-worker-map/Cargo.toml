@@ -10,7 +10,7 @@ license.workspace = true
 async-channel = "2.3.1"
 futures-util = { version = "0.3.29", default-features = false, features = ["std"] }
 pin-project-lite = "0.2.12"
-tokio = { version = "1.29.0", features = ["macros", "rt", "sync"] }
+tokio = { workspace = true, features = ["macros", "rt", "sync"] }
 
 [lints]
 workspace = true
