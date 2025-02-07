@@ -299,6 +299,8 @@ impl<T> Drop for Closer<T> {
 mod tests {
     use super::*;
     use futures_util::StreamExt;
+    use std::time::Duration;
+    use tokio::{sync::oneshot, time::timeout};
 
     #[tokio::test]
     async fn collect() {
@@ -457,5 +459,56 @@ mod tests {
         drop(receiver);
         assert!(sender.is_closed());
         assert!(sender.send(5).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn queued_run_after_close() {
+        let workers = NonZeroUsize::new(5).unwrap();
+        let (sender, mut receiver) = worker_map(
+            |rx: oneshot::Receiver<usize>| async move { rx.await.unwrap() },
+            workers,
+            workers,
+        );
+        let mut txes = Vec::new();
+        for _ in 0..10 {
+            let (tx, rx) = oneshot::channel();
+            sender.send(rx).await.unwrap();
+            txes.push(tx);
+        }
+        let r = timeout(Duration::from_millis(100), receiver.next()).await;
+        assert!(r.is_err());
+        drop(sender);
+        for (i, tx) in txes.into_iter().enumerate() {
+            tx.send(i).unwrap();
+        }
+        let mut values = receiver.collect::<Vec<_>>().await;
+        values.sort_unstable();
+        assert_eq!(values, (0..10).collect::<Vec<_>>());
+    }
+
+    #[tokio::test]
+    async fn queued_not_run_after_shutdown() {
+        let workers = NonZeroUsize::new(5).unwrap();
+        let (sender, mut receiver) = worker_map(
+            |rx: oneshot::Receiver<usize>| async move { rx.await.unwrap() },
+            workers,
+            workers,
+        );
+        let mut txes = Vec::new();
+        for _ in 0..10 {
+            let (tx, rx) = oneshot::channel();
+            sender.send(rx).await.unwrap();
+            txes.push(tx);
+        }
+        let r = timeout(Duration::from_millis(100), receiver.next()).await;
+        assert!(r.is_err());
+        drop(sender);
+        receiver.shutdown();
+        for (i, tx) in txes.into_iter().enumerate() {
+            let _ = tx.send(i);
+        }
+        let mut values = receiver.collect::<Vec<_>>().await;
+        values.sort_unstable();
+        assert_eq!(values, (0..5).collect::<Vec<_>>());
     }
 }
