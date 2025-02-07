@@ -4,7 +4,7 @@ use std::future::Future;
 use std::num::NonZeroUsize;
 use std::pin::Pin;
 use std::task::{ready, Context, Poll};
-use tokio::task::JoinSet;
+use tokio::{select, task::JoinSet};
 
 type UnwindResult<T> = Result<T, Box<dyn std::any::Any + Send>>;
 
@@ -22,13 +22,22 @@ where
     let (input_sender, input_receiver) = async_channel::bounded(buffer_size.get());
     let (output_sender, output_receiver) = tokio::sync::mpsc::unbounded_channel();
     let mut tasks = JoinSet::new();
+    let (shutdown_sender, shutdown_receiver) = tokio::sync::watch::channel(false);
     for _ in 0..workers.get() {
         tasks.spawn({
             let func = func.clone();
             let input = input_receiver.clone();
             let output = output_sender.clone();
+            let mut done = shutdown_receiver.clone();
             async move {
-                while let Ok(work) = input.recv().await {
+                loop {
+                    let work = select! {
+                        _ = done.changed() => break,
+                        r = input.recv() => match r {
+                            Ok(work) => work,
+                            Err(_) => break,
+                        },
+                    };
                     let r = std::panic::AssertUnwindSafe(func(work))
                         .catch_unwind()
                         .await;
@@ -44,6 +53,7 @@ where
         Receiver {
             inner: output_receiver,
             closer: Closer(input_receiver),
+            shutdown_sender,
             _tasks: tasks,
         },
     )
@@ -72,6 +82,7 @@ pin_project! {
         #[pin]
         inner: tokio::sync::mpsc::UnboundedReceiver<UnwindResult<U>>,
         closer: Closer<T>,
+        shutdown_sender: tokio::sync::watch::Sender<bool>,
         _tasks: JoinSet<()>,
     }
 }
@@ -88,6 +99,19 @@ impl<T: Send, U: Send> Receiver<T, U> {
 impl<T, U> Receiver<T, U> {
     pub fn close(&self) -> bool {
         self.closer.close()
+    }
+
+    // Returns `true` if `shutdown()` was not already called before
+    pub fn shutdown(&self) -> bool {
+        self.close();
+        self.shutdown_sender.send_if_modified(|b| {
+            if !*b {
+                *b = true;
+                true
+            } else {
+                false
+            }
+        })
     }
 }
 
@@ -216,11 +240,27 @@ mod tests {
         for i in 0..5 {
             sender.send(i).await.unwrap();
         }
-        receiver.close();
+        assert!(receiver.close());
         assert!(sender.send(5).await.is_err());
         drop(sender);
         let mut values = receiver.collect::<Vec<_>>().await;
         values.sort_unstable();
         assert_eq!(values, (1..6).collect::<Vec<_>>());
+    }
+
+    #[tokio::test]
+    async fn close_on_shutdown() {
+        let workers = NonZeroUsize::new(5).unwrap();
+        let (sender, receiver) = worker_map(|n| async move { n + 1 }, workers, workers);
+        for i in 0..5 {
+            sender.send(i).await.unwrap();
+        }
+        assert!(receiver.shutdown());
+        assert!(sender.send(5).await.is_err());
+        drop(sender);
+        // Note that, because shutdown() prevents queued tasks from running,
+        // the receiver will nondeterministically return a subset of the
+        // incremented inputs.
+        assert!(receiver.all(|n| async move { (1..6).contains(&n) }).await);
     }
 }
