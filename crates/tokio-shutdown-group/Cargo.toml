@@ -8,10 +8,10 @@ license.workspace = true
 
 [dependencies]
 tokio = { workspace = true, features = ["time"] }
-tokio-util = { version = "0.7.10", features = ["rt"] }
+tokio-util = { workspace = true, features = ["rt"] }
 
 [dev-dependencies]
-futures-util = { version = "0.3.29", default-features = false, features = ["std"] }
+futures-util = { workspace = true, features = ["std"] }
 tokio = { workspace = true, features = ["macros", "rt"] }
 
 [lints]
