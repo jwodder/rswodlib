@@ -61,7 +61,10 @@ where
         });
     }
     (
-        Sender(input_sender),
+        Sender {
+            inner: input_sender,
+            done: done.clone(),
+        },
         Receiver {
             inner: output_receiver,
             closer: Closer(input_receiver),
@@ -76,7 +79,10 @@ where
 /// Senders can be cloned and shared among threads. When all senders associated
 /// with a sender-receiver pair are dropped, the receiver becomes closed.
 #[derive(Debug)]
-pub struct Sender<T>(async_channel::Sender<T>);
+pub struct Sender<T> {
+    inner: async_channel::Sender<T>,
+    done: Arc<AtomicBool>,
+}
 
 impl<T> Sender<T> {
     /// Sends a task input into the channel, queuing it to be processed by the
@@ -86,14 +92,14 @@ impl<T> Sender<T> {
     ///
     /// If the channel is closed, this method returns an error.
     pub fn send(&self, msg: T) -> async_channel::Send<'_, T> {
-        self.0.send(msg)
+        self.inner.send(msg)
     }
 
     /// Attempts to send a message into the channel.
     ///
     /// If the channel is full or closed, this method returns an error.
     pub fn try_send(&self, msg: T) -> Result<(), async_channel::TrySendError<T>> {
-        self.0.try_send(msg)
+        self.inner.try_send(msg)
     }
 
     /// Closes the channel.  Any further calls to [`send()`](Self::send) or
@@ -105,32 +111,48 @@ impl<T> Sender<T> {
     /// Any pending task inputs will still be processed after calling
     /// `close()`.
     pub fn close(&self) -> bool {
-        self.0.close()
+        self.inner.close()
     }
 
     /// Returns `true` if the channel is closed.
     pub fn is_closed(&self) -> bool {
-        self.0.is_closed()
+        self.inner.is_closed()
+    }
+
+    /// Calls [`close()`](Self::close) and additionally instructs the worker
+    /// tasks to not process any pending task inputs.  Any inputs currently
+    /// being processed are still processed to completion.
+    ///
+    /// Returns `true` if this call has shut down the sender/receiver and it
+    /// was not shut down already.
+    pub fn shutdown(&self) -> bool {
+        self.close();
+        !self.done.swap(true, Ordering::SeqCst)
+    }
+
+    /// Returns `true` if the sender/receiver is shut down.
+    pub fn is_shutdown(&self) -> bool {
+        self.done.load(Ordering::SeqCst)
     }
 
     /// Returns `true` if the channel is empty.
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.inner.is_empty()
     }
 
     /// Returns `true` if the channel is full.
     pub fn is_full(&self) -> bool {
-        self.0.is_full()
+        self.inner.is_full()
     }
 
     /// Returns the number of pending inputs in the channel.
     pub fn len(&self) -> usize {
-        self.0.len()
+        self.inner.len()
     }
 
     /// Returns the channel capacity.
     pub fn capacity(&self) -> usize {
-        match self.0.capacity() {
+        match self.inner.capacity() {
             Some(n) => n,
             None => unreachable!("channel should be bounded"),
         }
@@ -141,7 +163,10 @@ impl<T> Sender<T> {
 // the impl.
 impl<T> Clone for Sender<T> {
     fn clone(&self) -> Sender<T> {
-        Sender(self.0.clone())
+        Sender {
+            inner: self.inner.clone(),
+            done: self.done.clone(),
+        }
     }
 }
 
@@ -387,11 +412,13 @@ mod tests {
         for i in 0..5 {
             sender.send(i).await.unwrap();
         }
+        assert!(!sender.is_shutdown());
         assert!(!receiver.is_shutdown());
         assert!(!receiver.is_closed());
         assert!(!sender.is_closed());
         assert!(receiver.close());
         assert!(sender.send(5).await.is_err());
+        assert!(!sender.is_shutdown());
         assert!(!receiver.is_shutdown());
         assert!(receiver.is_closed());
         assert!(sender.is_closed());
@@ -408,11 +435,13 @@ mod tests {
         for i in 0..5 {
             sender.send(i).await.unwrap();
         }
+        assert!(!sender.is_shutdown());
         assert!(!receiver.is_shutdown());
         assert!(!receiver.is_closed());
         assert!(!sender.is_closed());
         assert!(sender.close());
         assert!(sender.send(5).await.is_err());
+        assert!(!sender.is_shutdown());
         assert!(!receiver.is_shutdown());
         assert!(receiver.is_closed());
         assert!(sender.is_closed());
@@ -429,15 +458,19 @@ mod tests {
         for i in 0..5 {
             sender.send(i).await.unwrap();
         }
+        assert!(!sender.is_shutdown());
         assert!(!receiver.is_shutdown());
         assert!(!receiver.is_closed());
         assert!(!sender.is_closed());
         assert!(receiver.shutdown());
         assert!(sender.send(5).await.is_err());
+        assert!(sender.is_shutdown());
         assert!(receiver.is_shutdown());
         assert!(receiver.is_closed());
         assert!(sender.is_closed());
+        assert!(!sender.shutdown());
         assert!(!receiver.shutdown());
+        assert!(sender.is_shutdown());
         assert!(receiver.is_shutdown());
         assert!(receiver.is_closed());
         assert!(sender.is_closed());
@@ -484,7 +517,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn queued_not_run_after_shutdown() {
+    async fn queued_not_run_after_recv_shutdown() {
         let workers = NonZeroUsize::new(5).unwrap();
         let (sender, mut receiver) = worker_map(
             |rx: oneshot::Receiver<usize>| async move { rx.await.unwrap() },
@@ -500,6 +533,31 @@ mod tests {
         let r = timeout(Duration::from_millis(100), receiver.next()).await;
         assert!(r.is_err());
         receiver.shutdown();
+        for (i, tx) in txes.into_iter().enumerate() {
+            let _ = tx.send(i);
+        }
+        let mut values = receiver.collect::<Vec<_>>().await;
+        values.sort_unstable();
+        assert_eq!(values, (0..5).collect::<Vec<_>>());
+    }
+
+    #[tokio::test]
+    async fn queued_not_run_after_send_shutdown() {
+        let workers = NonZeroUsize::new(5).unwrap();
+        let (sender, mut receiver) = worker_map(
+            |rx: oneshot::Receiver<usize>| async move { rx.await.unwrap() },
+            workers,
+            workers,
+        );
+        let mut txes = Vec::new();
+        for _ in 0..10 {
+            let (tx, rx) = oneshot::channel();
+            sender.send(rx).await.unwrap();
+            txes.push(tx);
+        }
+        let r = timeout(Duration::from_millis(100), receiver.next()).await;
+        assert!(r.is_err());
+        sender.shutdown();
         for (i, tx) in txes.into_iter().enumerate() {
             let _ = tx.send(i);
         }
