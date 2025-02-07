@@ -97,4 +97,74 @@ mod tests {
         values.sort_unstable();
         assert_eq!(values, (1..21).collect::<Vec<_>>());
     }
+
+    #[tokio::test]
+    async fn reraise_panic_recv() {
+        let workers = NonZeroUsize::new(5).unwrap();
+        let (sender, mut receiver) = worker_map(
+            |n: u32| async move {
+                if n < 4 {
+                    n + 1
+                } else {
+                    panic!("I can't count that high!")
+                }
+            },
+            workers,
+            workers,
+        );
+        for i in 0..20 {
+            sender.send(i).await.unwrap();
+        }
+        drop(sender);
+        let mut outputs = Vec::new();
+        let mut panics = 0;
+        loop {
+            let r = std::panic::AssertUnwindSafe(receiver.recv())
+                .catch_unwind()
+                .await;
+            match r {
+                Ok(Some(n)) => outputs.push(n),
+                Ok(None) => break,
+                Err(_) => panics += 1,
+            }
+        }
+        assert_eq!(panics, 16);
+        outputs.sort_unstable();
+        assert_eq!(outputs, vec![1, 2, 3, 4]);
+    }
+
+    #[tokio::test]
+    async fn reraise_panic_next() {
+        let workers = NonZeroUsize::new(5).unwrap();
+        let (sender, mut receiver) = worker_map(
+            |n: u32| async move {
+                if n < 4 {
+                    n + 1
+                } else {
+                    panic!("I can't count that high!")
+                }
+            },
+            workers,
+            workers,
+        );
+        for i in 0..20 {
+            sender.send(i).await.unwrap();
+        }
+        drop(sender);
+        let mut outputs = Vec::new();
+        let mut panics = 0;
+        loop {
+            let r = std::panic::AssertUnwindSafe(receiver.next())
+                .catch_unwind()
+                .await;
+            match r {
+                Ok(Some(n)) => outputs.push(n),
+                Ok(None) => break,
+                Err(_) => panics += 1,
+            }
+        }
+        assert_eq!(panics, 16);
+        outputs.sort_unstable();
+        assert_eq!(outputs, vec![1, 2, 3, 4]);
+    }
 }
