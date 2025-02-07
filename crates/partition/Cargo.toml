@@ -1,7 +1,7 @@
 [package]
 name = "rswodlib-partition"
 edition.workspace = true
-#description = ...
+description = "Splitting a string on the first occurrence of a pattern"
 authors.workspace = true
 repository.workspace = true
 license.workspace = true
