@@ -212,7 +212,9 @@ mod tests {
         for i in 0..20 {
             sender.send(i).await.unwrap();
         }
+        assert!(!receiver.is_closed());
         drop(sender);
+        assert!(receiver.is_closed());
         let mut values = receiver.collect::<Vec<_>>().await;
         values.sort_unstable();
         assert_eq!(values, (1..21).collect::<Vec<_>>());
