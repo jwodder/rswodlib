@@ -103,10 +103,11 @@ impl<T> Clone for Sender<T> {
     }
 }
 
+// pin_project lets us call poll_recv() in poll_next() without even calling
+// project().  Not sure how.
 pin_project! {
     #[derive(Debug)]
     pub struct Receiver<T, U> {
-        #[pin]
         inner: tokio::sync::mpsc::UnboundedReceiver<UnwindResult<U>>,
         closer: Closer<T>,
         shutdown_sender: tokio::sync::watch::Sender<bool>,
@@ -169,13 +170,8 @@ impl<T, U> Receiver<T, U> {
 impl<T, U: 'static> Stream for Receiver<T, U> {
     type Item = U;
 
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<U>> {
-        let mut this = self.project();
-        match ready!(this.inner.poll_recv(cx)) {
-            Some(Ok(r)) => Some(r).into(),
-            Some(Err(e)) => std::panic::resume_unwind(e),
-            None => None.into(),
-        }
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<U>> {
+        self.poll_recv(cx)
     }
 }
 
