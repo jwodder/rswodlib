@@ -18,7 +18,7 @@ where
     U: Send + 'static,
 {
     let (input_sender, input_receiver) = async_channel::bounded(buffer_size.get());
-    let (output_sender, output_receiver) = tokio::sync::mpsc::channel(buffer_size.get());
+    let (output_sender, output_receiver) = tokio::sync::mpsc::unbounded_channel();
     for _ in 0..workers.get() {
         tokio::spawn({
             let func = func.clone();
@@ -29,7 +29,7 @@ where
                     let r = std::panic::AssertUnwindSafe(func(work))
                         .catch_unwind()
                         .await;
-                    if output.send(r).await.is_err() {
+                    if output.send(r).is_err() {
                         break;
                     }
                 }
@@ -57,7 +57,7 @@ impl<T> Clone for Sender<T> {
 }
 
 #[derive(Debug)]
-pub struct Receiver<T>(tokio::sync::mpsc::Receiver<UnwindResult<T>>);
+pub struct Receiver<T>(tokio::sync::mpsc::UnboundedReceiver<UnwindResult<T>>);
 
 impl<T: Send> Receiver<T> {
     pub async fn recv(&mut self) -> Option<T> {
@@ -77,5 +77,24 @@ impl<T: 'static> Stream for Receiver<T> {
             Some(Err(e)) => std::panic::resume_unwind(e),
             None => None.into(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use futures_util::StreamExt;
+
+    #[tokio::test]
+    async fn collect() {
+        let workers = NonZeroUsize::new(5).unwrap();
+        let (sender, receiver) = worker_map(|n| async move { n + 1 }, workers, workers);
+        for i in 0..20 {
+            sender.send(i).await.unwrap();
+        }
+        drop(sender);
+        let mut values = receiver.collect::<Vec<_>>().await;
+        values.sort_unstable();
+        assert_eq!(values, (1..21).collect::<Vec<_>>());
     }
 }
