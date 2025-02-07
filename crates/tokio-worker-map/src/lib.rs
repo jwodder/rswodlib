@@ -208,6 +208,34 @@ impl<T: Send, U: Send> Receiver<T, U> {
             Err(e) => std::panic::resume_unwind(e),
         }
     }
+
+    /// Tries to receive the next result for this receiver.
+    ///
+    /// This method returns the [`Empty`] error if the channel is currently
+    /// empty but there are still outstanding [senders] or [permits].
+    ///
+    /// This method returns the [`Disconnected`] error if the channel is
+    /// currently empty and there are no outstanding [senders] or [permits].
+    ///
+    /// Unlike the [`poll_recv`] method, this method will never return an
+    /// [`Empty`] error spuriously.
+    ///
+    /// [`Empty`]: tokio::sync::mpsc::error::TryRecvError::Empty
+    /// [`Disconnected`]: tokio::sync::mpsc::error::TryRecvError::Disconnected
+    /// [`poll_recv`]: Self::poll_recv
+    /// [senders]: tokio::sync::mpsc::Sender
+    /// [permits]: tokio::sync::mpsc::Permit
+    ///
+    /// # Panics
+    ///
+    /// If the channel receives a result from a task that panicked, this method
+    /// resumes unwinding the panic.
+    pub fn try_recv(&mut self) -> Result<U, tokio::sync::mpsc::error::TryRecvError> {
+        match self.inner.try_recv()? {
+            Ok(r) => Ok(r),
+            Err(e) => std::panic::resume_unwind(e),
+        }
+    }
 }
 
 impl<T, U> Receiver<T, U> {
@@ -317,8 +345,7 @@ impl<T> Drop for Closer<T> {
 mod tests {
     use super::*;
     use futures_util::StreamExt;
-    use std::time::Duration;
-    use tokio::{sync::oneshot, time::timeout};
+    use tokio::sync::{mpsc::error::TryRecvError, oneshot};
 
     #[tokio::test]
     async fn collect() {
@@ -505,8 +532,7 @@ mod tests {
             sender.send(rx).await.unwrap();
             txes.push(tx);
         }
-        let r = timeout(Duration::from_millis(100), receiver.next()).await;
-        assert!(r.is_err());
+        assert_eq!(receiver.try_recv(), Err(TryRecvError::Empty));
         sender.close();
         for (i, tx) in txes.into_iter().enumerate() {
             tx.send(i).unwrap();
@@ -530,8 +556,7 @@ mod tests {
             sender.send(rx).await.unwrap();
             txes.push(tx);
         }
-        let r = timeout(Duration::from_millis(100), receiver.next()).await;
-        assert!(r.is_err());
+        assert_eq!(receiver.try_recv(), Err(TryRecvError::Empty));
         receiver.shutdown();
         for (i, tx) in txes.into_iter().enumerate() {
             let _ = tx.send(i);
@@ -555,8 +580,7 @@ mod tests {
             sender.send(rx).await.unwrap();
             txes.push(tx);
         }
-        let r = timeout(Duration::from_millis(100), receiver.next()).await;
-        assert!(r.is_err());
+        assert_eq!(receiver.try_recv(), Err(TryRecvError::Empty));
         sender.shutdown();
         for (i, tx) in txes.into_iter().enumerate() {
             let _ = tx.send(i);
