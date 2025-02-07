@@ -3,8 +3,12 @@ use pin_project_lite::pin_project;
 use std::future::Future;
 use std::num::NonZeroUsize;
 use std::pin::Pin;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 use std::task::{ready, Context, Poll};
-use tokio::{select, task::JoinSet};
+use tokio::task::JoinSet;
 
 type UnwindResult<T> = Result<T, Box<dyn std::any::Any + Send>>;
 
@@ -34,22 +38,18 @@ where
     let (input_sender, input_receiver) = async_channel::bounded(buffer_size.get());
     let (output_sender, output_receiver) = tokio::sync::mpsc::unbounded_channel();
     let mut tasks = JoinSet::new();
-    let (shutdown_sender, shutdown_receiver) = tokio::sync::watch::channel(false);
+    let done = Arc::new(AtomicBool::new(false));
     for _ in 0..workers.get() {
         tasks.spawn({
             let func = func.clone();
             let input = input_receiver.clone();
             let output = output_sender.clone();
-            let mut done = shutdown_receiver.clone();
+            let done = done.clone();
             async move {
-                loop {
-                    let work = select! {
-                        _ = done.changed() => break,
-                        r = input.recv() => match r {
-                            Ok(work) => work,
-                            Err(_) => break,
-                        },
-                    };
+                while let Ok(work) = input.recv().await {
+                    if done.load(Ordering::SeqCst) {
+                        break;
+                    }
                     let r = std::panic::AssertUnwindSafe(func(work))
                         .catch_unwind()
                         .await;
@@ -65,7 +65,7 @@ where
         Receiver {
             inner: output_receiver,
             closer: Closer(input_receiver),
-            shutdown_sender,
+            done,
             _tasks: tasks,
         },
     )
@@ -159,7 +159,7 @@ pin_project! {
     pub struct Receiver<T, U> {
         inner: tokio::sync::mpsc::UnboundedReceiver<UnwindResult<U>>,
         closer: Closer<T>,
-        shutdown_sender: tokio::sync::watch::Sender<bool>,
+        done: Arc<AtomicBool>,
         _tasks: JoinSet<()>,
     }
 }
@@ -211,19 +211,12 @@ impl<T, U> Receiver<T, U> {
     /// was not shut down already.
     pub fn shutdown(&self) -> bool {
         self.close();
-        self.shutdown_sender.send_if_modified(|b| {
-            if !*b {
-                *b = true;
-                true
-            } else {
-                false
-            }
-        })
+        !self.done.swap(true, Ordering::SeqCst)
     }
 
     /// Returns `true` if the sender/receiver is shut down.
     pub fn is_shutdown(&self) -> bool {
-        *self.shutdown_sender.borrow()
+        self.done.load(Ordering::SeqCst)
     }
 
     /// Returns `true` if the channel is empty.
@@ -444,6 +437,10 @@ mod tests {
         assert!(receiver.is_shutdown());
         assert!(receiver.is_closed());
         assert!(sender.is_closed());
+        assert!(!receiver.shutdown());
+        assert!(receiver.is_shutdown());
+        assert!(receiver.is_closed());
+        assert!(sender.is_closed());
         drop(sender);
         // Note that, because shutdown() prevents queued tasks from running,
         // the receiver will nondeterministically return a subset of the
@@ -477,7 +474,7 @@ mod tests {
         }
         let r = timeout(Duration::from_millis(100), receiver.next()).await;
         assert!(r.is_err());
-        drop(sender);
+        sender.close();
         for (i, tx) in txes.into_iter().enumerate() {
             tx.send(i).unwrap();
         }
@@ -502,7 +499,6 @@ mod tests {
         }
         let r = timeout(Duration::from_millis(100), receiver.next()).await;
         assert!(r.is_err());
-        drop(sender);
         receiver.shutdown();
         for (i, tx) in txes.into_iter().enumerate() {
             let _ = tx.send(i);
