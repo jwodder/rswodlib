@@ -54,7 +54,7 @@ mod tests {
         group.spawn(|token| async move {
             tokio::select! {
                 () = token.cancelled() => (),
-                () = futures_util::future::ready(()) => my_finished.store(true, Ordering::Release),
+                () = std::future::ready(()) => my_finished.store(true, Ordering::Release),
             }
         });
         let task2_cancelled = Arc::new(AtomicBool::new(false));
