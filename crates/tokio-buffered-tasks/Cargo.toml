@@ -7,7 +7,7 @@ repository.workspace = true
 license.workspace = true
 
 [dependencies]
-futures-util = { version = "0.3.29", default-features = false, features = ["std"] }
+futures-util.workspace = true
 tokio = { workspace = true, features = ["rt", "sync"] }
 
 [lints]
