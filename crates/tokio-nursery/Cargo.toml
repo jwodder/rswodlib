@@ -8,11 +8,11 @@ license.workspace = true
 
 [dependencies]
 futures-util = { version = "0.3.29", default-features = false, features = ["std"] }
-pin-project-lite = "0.2.11"
-tokio = { version = "1.29.0", features = ["rt", "sync"] }
+pin-project-lite = "0.2.12"
+tokio = { workspace = true, features = ["rt", "sync"] }
 
 [dev-dependencies]
-tokio = { version = "1.29.0", features = ["macros", "rt", "time"] }
+tokio = { workspace = true, features = ["macros", "rt", "time"] }
 
 [lints]
 workspace = true

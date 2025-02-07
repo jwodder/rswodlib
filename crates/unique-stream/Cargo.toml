@@ -8,10 +8,10 @@ license.workspace = true
 
 [dependencies]
 futures-util = { version = "0.3.29", default-features = false, features = ["std"] }
-pin-project-lite = "0.2.11"
+pin-project-lite = "0.2.12"
 
 [dev-dependencies]
-tokio = { version = "1.29.0", features = ["macros", "rt"] }
+tokio = { workspace = true, features = ["macros", "rt"] }
 
 [lints]
 workspace = true
