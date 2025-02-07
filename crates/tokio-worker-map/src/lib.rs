@@ -1,4 +1,5 @@
 use futures_util::{FutureExt, Stream};
+use pin_project_lite::pin_project;
 use std::future::Future;
 use std::num::NonZeroUsize;
 use std::pin::Pin;
@@ -11,7 +12,7 @@ pub fn worker_map<F, Fut, T, U>(
     func: F,
     workers: NonZeroUsize,
     buffer_size: NonZeroUsize,
-) -> (Sender<T>, Receiver<U>)
+) -> (Sender<T>, Receiver<T, U>)
 where
     F: Fn(T) -> Fut + Clone + Send + 'static,
     Fut: Future<Output = U> + Send,
@@ -42,6 +43,7 @@ where
         Sender(input_sender),
         Receiver {
             inner: output_receiver,
+            closer: Closer(input_receiver),
             _tasks: tasks,
         },
     )
@@ -64,14 +66,18 @@ impl<T> Clone for Sender<T> {
     }
 }
 
-#[derive(Debug)]
-pub struct Receiver<T> {
-    inner: tokio::sync::mpsc::UnboundedReceiver<UnwindResult<T>>,
-    _tasks: JoinSet<()>,
+pin_project! {
+    #[derive(Debug)]
+    pub struct Receiver<T, U> {
+        #[pin]
+        inner: tokio::sync::mpsc::UnboundedReceiver<UnwindResult<U>>,
+        closer: Closer<T>,
+        _tasks: JoinSet<()>,
+    }
 }
 
-impl<T: Send> Receiver<T> {
-    pub async fn recv(&mut self) -> Option<T> {
+impl<T: Send, U: Send> Receiver<T, U> {
+    pub async fn recv(&mut self) -> Option<U> {
         match self.inner.recv().await? {
             Ok(r) => Some(r),
             Err(e) => std::panic::resume_unwind(e),
@@ -79,15 +85,39 @@ impl<T: Send> Receiver<T> {
     }
 }
 
-impl<T: 'static> Stream for Receiver<T> {
-    type Item = T;
+impl<T, U> Receiver<T, U> {
+    pub fn close(&self) -> bool {
+        self.closer.close()
+    }
+}
 
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<T>> {
-        match ready!(self.inner.poll_recv(cx)) {
+impl<T, U: 'static> Stream for Receiver<T, U> {
+    type Item = U;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<U>> {
+        let mut this = self.project();
+        match ready!(this.inner.poll_recv(cx)) {
             Some(Ok(r)) => Some(r).into(),
             Some(Err(e)) => std::panic::resume_unwind(e),
             None => None.into(),
         }
+    }
+}
+
+// This type is needed because putting the Drop impl on Receiver instead
+// conflicts with pin_project_lite.
+#[derive(Debug)]
+struct Closer<T>(async_channel::Receiver<T>);
+
+impl<T> Closer<T> {
+    fn close(&self) -> bool {
+        self.0.close()
+    }
+}
+
+impl<T> Drop for Closer<T> {
+    fn drop(&mut self) {
+        self.close();
     }
 }
 
@@ -177,5 +207,20 @@ mod tests {
         assert_eq!(panics, 16);
         outputs.sort_unstable();
         assert_eq!(outputs, vec![1, 2, 3, 4]);
+    }
+
+    #[tokio::test]
+    async fn close() {
+        let workers = NonZeroUsize::new(5).unwrap();
+        let (sender, receiver) = worker_map(|n| async move { n + 1 }, workers, workers);
+        for i in 0..5 {
+            sender.send(i).await.unwrap();
+        }
+        receiver.close();
+        assert!(sender.send(5).await.is_err());
+        drop(sender);
+        let mut values = receiver.collect::<Vec<_>>().await;
+        values.sort_unstable();
+        assert_eq!(values, (1..6).collect::<Vec<_>>());
     }
 }
