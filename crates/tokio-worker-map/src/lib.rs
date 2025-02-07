@@ -448,4 +448,14 @@ mod tests {
         // incremented inputs.
         assert!(receiver.all(|n| async move { (1..6).contains(&n) }).await);
     }
+
+    #[tokio::test]
+    async fn dropping_receiver_closes_sender() {
+        let workers = NonZeroUsize::new(5).unwrap();
+        let (sender, receiver) = worker_map(|n| async move { n + 1 }, workers, workers);
+        assert!(!sender.is_closed());
+        drop(receiver);
+        assert!(sender.is_closed());
+        assert!(sender.send(5).await.is_err());
+    }
 }
