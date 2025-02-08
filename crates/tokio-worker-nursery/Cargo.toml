@@ -1,0 +1,19 @@
+[package]
+name = "rswodlib-tokio-worker-nursery"
+edition.workspace = true
+description = "Tokio-based task group/nursery with a fixed number of worker tasks"
+authors.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+async-channel = "2.3.1"
+futures-util = { workspace = true, features = ["std"] }
+pin-project-lite.workspace = true
+tokio = { workspace = true, features = ["rt", "sync"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "time"] }
+
+[lints]
+workspace = true
