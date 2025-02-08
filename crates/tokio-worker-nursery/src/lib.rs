@@ -504,6 +504,8 @@ mod tests {
             nursery.spawn(async move { rx.await.unwrap() }).unwrap();
             txes.push(tx);
         }
+        // <https://users.rust-lang.org/t/125314>
+        tokio::task::yield_now().await;
         assert_eq!(stream.try_recv(), Err(TryRecvError::Empty));
         stream.shutdown();
         for (i, tx) in txes.into_iter().enumerate() {
@@ -523,6 +525,8 @@ mod tests {
             nursery.spawn(async move { rx.await.unwrap() }).unwrap();
             txes.push(tx);
         }
+        // <https://users.rust-lang.org/t/125314>
+        tokio::task::yield_now().await;
         assert_eq!(stream.try_recv(), Err(TryRecvError::Empty));
         nursery.shutdown();
         for (i, tx) in txes.into_iter().enumerate() {
