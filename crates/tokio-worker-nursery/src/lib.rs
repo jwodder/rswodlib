@@ -532,4 +532,82 @@ mod tests {
         values.sort_unstable();
         assert_eq!(values, (0..5).collect::<Vec<_>>());
     }
+
+    #[tokio::test]
+    async fn nested_spawn() {
+        let (nursery, stream) = WorkerNursery::new(NonZeroUsize::new(5).unwrap());
+        let inner = nursery.clone();
+        nursery
+            .spawn(async move {
+                inner.spawn(std::future::ready(0)).unwrap();
+                std::future::ready(1).await
+            })
+            .unwrap();
+        nursery.spawn(std::future::ready(2)).unwrap();
+        nursery.spawn(std::future::ready(3)).unwrap();
+        drop(nursery);
+        let mut values = stream.collect::<Vec<_>>().await;
+        values.sort_unstable();
+        assert_eq!(values, vec![0, 1, 2, 3]);
+    }
+
+    #[tokio::test]
+    async fn no_close_until_drop() {
+        let (nursery, mut nursery_stream) = WorkerNursery::new(NonZeroUsize::new(5).unwrap());
+        nursery.spawn(std::future::ready(1)).unwrap();
+        nursery.spawn(std::future::ready(2)).unwrap();
+        nursery.spawn(std::future::ready(3)).unwrap();
+        let mut values = Vec::new();
+        values.push(nursery_stream.next().await.unwrap());
+        values.push(nursery_stream.next().await.unwrap());
+        values.push(nursery_stream.next().await.unwrap());
+        values.sort_unstable();
+        assert_eq!(values, vec![1, 2, 3]);
+        assert_eq!(nursery_stream.try_recv(), Err(TryRecvError::Empty));
+        drop(nursery);
+        //assert_eq!(nursery_stream.try_recv(), Err(TryRecvError::Done));
+        let r = tokio::time::timeout(std::time::Duration::from_millis(100), nursery_stream.next())
+            .await;
+        assert_eq!(r, Ok(None));
+    }
+
+    #[tokio::test]
+    async fn drop_tasks_on_drop_stream() {
+        enum Void {}
+
+        let (nursery, nursery_stream) = WorkerNursery::new(NonZeroUsize::new(5).unwrap());
+        let (sender, receiver) = oneshot::channel::<Void>();
+        nursery
+            .spawn({
+                async move {
+                    std::future::pending::<()>().await;
+                    drop(sender);
+                }
+            })
+            .unwrap();
+        drop(nursery);
+        drop(nursery_stream);
+        assert!(receiver.await.is_err());
+    }
+
+    #[tokio::test]
+    async fn nest_nurseries() {
+        let (nursery, stream) = WorkerNursery::new(NonZeroUsize::new(5).unwrap());
+        nursery
+            .spawn(async {
+                let (nursery, stream) = WorkerNursery::new(NonZeroUsize::new(5).unwrap());
+                nursery.spawn(std::future::ready(1)).unwrap();
+                nursery.spawn(std::future::ready(2)).unwrap();
+                nursery.spawn(std::future::ready(3)).unwrap();
+                drop(nursery);
+                stream.fold(0, |accum, i| async move { accum + i }).await
+            })
+            .unwrap();
+        nursery.spawn(std::future::ready(4)).unwrap();
+        nursery.spawn(std::future::ready(5)).unwrap();
+        drop(nursery);
+        let mut values = stream.collect::<Vec<_>>().await;
+        values.sort_unstable();
+        assert_eq!(values, vec![4, 5, 6]);
+    }
 }
