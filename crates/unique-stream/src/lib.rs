@@ -1,4 +1,4 @@
-use futures_util::stream::Stream;
+use futures_util::stream::{FusedStream, Stream};
 use pin_project_lite::pin_project;
 use std::collections::HashSet;
 use std::hash::Hash;
@@ -6,6 +6,7 @@ use std::pin::Pin;
 use std::task::{ready, Context, Poll};
 
 pub trait UniqueExt: Stream {
+    /// Yield only unique values from the stream
     fn unique(self) -> UniqueStream<Self>
     where
         Self: Sized,
@@ -57,6 +58,15 @@ where
                 None => return None.into(),
             }
         }
+    }
+}
+
+impl<S: FusedStream> FusedStream for UniqueStream<S>
+where
+    S::Item: Eq + Hash + Clone,
+{
+    fn is_terminated(&self) -> bool {
+        self.inner.is_terminated()
     }
 }
 
