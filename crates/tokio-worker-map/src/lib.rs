@@ -1,5 +1,6 @@
 use futures_util::{FutureExt, Stream};
 use pin_project_lite::pin_project;
+use std::fmt;
 use std::future::Future;
 use std::num::NonZeroUsize;
 use std::pin::Pin;
@@ -8,7 +9,7 @@ use std::sync::{
     Arc,
 };
 use std::task::{ready, Context, Poll};
-use tokio::task::JoinSet;
+use tokio::{sync::mpsc, task::JoinSet};
 
 type UnwindResult<T> = Result<T, Box<dyn std::any::Any + Send>>;
 
@@ -36,7 +37,7 @@ where
     U: Send + 'static,
 {
     let (input_sender, input_receiver) = async_channel::bounded(buffer_size.get());
-    let (output_sender, output_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (output_sender, output_receiver) = mpsc::unbounded_channel();
     let mut tasks = JoinSet::new();
     let done = Arc::new(AtomicBool::new(false));
     for _ in 0..workers.get() {
@@ -98,8 +99,8 @@ impl<T> Sender<T> {
     /// Attempts to send a message into the channel.
     ///
     /// If the channel is full or closed, this method returns an error.
-    pub fn try_send(&self, msg: T) -> Result<(), async_channel::TrySendError<T>> {
-        self.inner.try_send(msg)
+    pub fn try_send(&self, msg: T) -> Result<(), TrySendError<T>> {
+        self.inner.try_send(msg).map_err(Into::into)
     }
 
     /// Closes the channel.  Any further calls to [`send()`](Self::send) or
@@ -182,7 +183,7 @@ pin_project! {
     /// and the sender channels are closed.
     #[derive(Debug)]
     pub struct Receiver<T, U> {
-        inner: tokio::sync::mpsc::UnboundedReceiver<UnwindResult<U>>,
+        inner: mpsc::UnboundedReceiver<UnwindResult<U>>,
         closer: Closer<T>,
         done: Arc<AtomicBool>,
         _tasks: JoinSet<()>,
@@ -212,25 +213,24 @@ impl<T: Send, U: Send> Receiver<T, U> {
     /// Tries to receive the next result for this receiver.
     ///
     /// This method returns the [`Empty`] error if the channel is currently
-    /// empty but there are still outstanding [senders] or [permits].
+    /// empty but there are still outstanding [senders].
     ///
-    /// This method returns the [`Disconnected`] error if the channel is
-    /// currently empty and there are no outstanding [senders] or [permits].
+    /// This method returns the [`Done`] error if the channel is currently
+    /// empty and there are no outstanding [senders].
     ///
     /// Unlike the [`poll_recv`] method, this method will never return an
     /// [`Empty`] error spuriously.
     ///
-    /// [`Empty`]: tokio::sync::mpsc::error::TryRecvError::Empty
-    /// [`Disconnected`]: tokio::sync::mpsc::error::TryRecvError::Disconnected
+    /// [`Empty`]: TryRecvError::Empty
+    /// [`Done`]: TryRecvError::Done
     /// [`poll_recv`]: Self::poll_recv
-    /// [senders]: tokio::sync::mpsc::Sender
-    /// [permits]: tokio::sync::mpsc::Permit
+    /// [senders]: Sender
     ///
     /// # Panics
     ///
     /// If the channel receives a result from a task that panicked, this method
     /// resumes unwinding the panic.
-    pub fn try_recv(&mut self) -> Result<U, tokio::sync::mpsc::error::TryRecvError> {
+    pub fn try_recv(&mut self) -> Result<U, TryRecvError> {
         match self.inner.try_recv()? {
             Ok(r) => Ok(r),
             Err(e) => std::panic::resume_unwind(e),
@@ -341,11 +341,72 @@ impl<T> Drop for Closer<T> {
     }
 }
 
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub enum TrySendError<T> {
+    Full(T),
+    Closed(T),
+}
+
+impl<T> fmt::Debug for TrySendError<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TrySendError::Full(_) => write!(f, "Full(..)"),
+            TrySendError::Closed(_) => write!(f, "Closed(..)"),
+        }
+    }
+}
+
+impl<T> fmt::Display for TrySendError<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TrySendError::Full(_) => write!(f, "cannot send into a full channel"),
+            TrySendError::Closed(_) => write!(f, "cannot send into a closed channel"),
+        }
+    }
+}
+
+impl<T> std::error::Error for TrySendError<T> {}
+
+impl<T> From<async_channel::TrySendError<T>> for TrySendError<T> {
+    fn from(value: async_channel::TrySendError<T>) -> TrySendError<T> {
+        match value {
+            async_channel::TrySendError::Full(t) => TrySendError::Full(t),
+            async_channel::TrySendError::Closed(t) => TrySendError::Closed(t),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TryRecvError {
+    Empty,
+    Done,
+}
+
+impl fmt::Display for TryRecvError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TryRecvError::Empty => write!(f, "output stream is empty"),
+            TryRecvError::Done => write!(f, "workers are done"),
+        }
+    }
+}
+
+impl std::error::Error for TryRecvError {}
+
+impl From<mpsc::error::TryRecvError> for TryRecvError {
+    fn from(e: mpsc::error::TryRecvError) -> TryRecvError {
+        match e {
+            mpsc::error::TryRecvError::Empty => TryRecvError::Empty,
+            mpsc::error::TryRecvError::Disconnected => TryRecvError::Done,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use futures_util::StreamExt;
-    use tokio::sync::{mpsc::error::TryRecvError, oneshot};
+    use tokio::sync::oneshot;
 
     #[tokio::test]
     async fn collect() {
