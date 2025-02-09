@@ -6,6 +6,7 @@ use std::pin::Pin;
 use std::task::{ready, Context, Poll};
 
 pub trait UniqueExt: Stream {
+    /// Yield only unique values from the stream
     fn unique(self) -> UniqueStream<Self>
     where
         Self: Sized,
