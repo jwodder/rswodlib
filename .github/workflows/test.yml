@@ -107,6 +107,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
+          # Use nightly so `partition` gets covered.
           toolchain: nightly
           components: llvm-tools
 
@@ -148,11 +149,11 @@ jobs:
       - name: Install cargo-hack
         uses: taiki-e/install-action@cargo-hack
 
-      - name: Check code (no tests)
+      - name: Check code
         run: cargo hack --workspace --feature-powerset clippy -- -Dwarnings
 
-      - name: Check code (including tests)
-        run: cargo hack --workspace --feature-powerset clippy --all-targets -- -Dwarnings
+      - name: Check tests & examples
+        run: cargo hack --workspace --feature-powerset clippy --tests --examples -- -Dwarnings
 
       - name: Check formatting
         run: cargo fmt --all --check
@@ -175,6 +176,6 @@ jobs:
       - name: Check docs
         run: cargo doc --workspace --no-deps --all-features
         env:
-          RUSTDOCFLAGS: -Dwarnings
+          RUSTDOCFLAGS: -Dwarnings --cfg docsrs
 
 # vim:set et sts=2:
