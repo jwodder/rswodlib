@@ -186,6 +186,8 @@ pin_project! {
         inner: mpsc::UnboundedReceiver<UnwindResult<U>>,
         closer: Closer<T>,
         done: Arc<AtomicBool>,
+        // The JoinSet of tasks is kept around so that the tasks are aborted
+        // only when the Receiver is dropped.
         _tasks: JoinSet<()>,
     }
 }
