@@ -11,7 +11,7 @@ license = "MIT"
 [workspace.dependencies]
 futures-util = { version = "0.3.29", default-features = false }
 pin-project-lite = "0.2.12"
-rstest = { version = "0.25.0", default-features = false }
+rstest = { version = "0.26.0", default-features = false }
 thiserror = "2.0.0"
 tokio = "1.37.0"
 tokio-util =  "0.7.10"
