@@ -1,79 +1,70 @@
-use self::inner::Receiver as _;
 use futures_util::{
     future::{maybe_done, MaybeDone},
     stream::Stream,
 };
 use pin_project_lite::pin_project;
 use std::future::Future;
-use std::marker::PhantomData;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use tokio::sync::mpsc::{
-    channel, unbounded_channel, Receiver, Sender, UnboundedReceiver, UnboundedSender,
-};
+use tokio::{sync::mpsc, task::JoinHandle};
 
-/// `received_stream()` takes a buffer size and an async procedure that takes a
-/// [`tokio::sync::mpsc::Sender`], and it returns a stream that runs the
-/// procedure to completion while yielding the values passed to the sender.
+/// `received_stream()` takes a buffer size and an async function that takes a
+/// [`tokio::sync::mpsc::Sender`], and it spawns a task for the function and
+/// returns a stream of the values passed to the sender.
 ///
-/// If the stream is dropped before completion, the async procedure (which may
-/// or may not have completed by that point) is dropped as well.
-pub fn received_stream<F, Fut, T>(buffer: usize, f: F) -> ReceivedStream<Fut, T, Receiver<T>>
+/// If the stream is dropped before completion, the async function is cancelled.
+pub fn received_stream<F, Fut, T>(buffer: usize, f: F) -> ReceivedStream<mpsc::Receiver<T>>
 where
-    F: FnOnce(Sender<T>) -> Fut,
-    Fut: Future<Output = ()>,
+    F: FnOnce(mpsc::Sender<T>) -> Fut,
+    Fut: Future<Output = ()> + Send + 'static,
 {
-    let (sender, receiver) = channel(buffer);
-    let future = f(sender);
-    ReceivedStream::new(future, receiver)
+    let (sender, receiver) = mpsc::channel(buffer);
+    let handle = tokio::spawn(f(sender));
+    ReceivedStream::new(handle, receiver)
 }
 
-/// `unbounded_received_stream()` takes an async procedure that takes a
-/// [`tokio::sync::mpsc::UnboundedSender`], and it returns a stream that runs
-/// the procedure to completion while yielding the values passed to the sender.
+/// `unbounded_received_stream()` takes an async function that takes a
+/// [`tokio::sync::mpsc::UnboundedSender`], and it spawns a task for the
+/// function and returns a stream of the values passed to the sender.
 ///
-/// If the stream is dropped before completion, the async procedure (which may
-/// or may not have completed by that point) is dropped as well.
-pub fn unbounded_received_stream<F, Fut, T>(f: F) -> ReceivedStream<Fut, T, UnboundedReceiver<T>>
+/// If the stream is dropped before completion, the async function is cancelled.
+pub fn unbounded_received_stream<F, Fut, T>(f: F) -> ReceivedStream<mpsc::UnboundedReceiver<T>>
 where
-    F: FnOnce(UnboundedSender<T>) -> Fut,
-    Fut: Future<Output = ()>,
+    F: FnOnce(mpsc::UnboundedSender<T>) -> Fut,
+    Fut: Future<Output = ()> + Send + 'static,
 {
-    let (sender, receiver) = unbounded_channel();
-    let future = f(sender);
-    ReceivedStream::new(future, receiver)
+    let (sender, receiver) = mpsc::unbounded_channel();
+    let handle = tokio::spawn(f(sender));
+    ReceivedStream::new(handle, receiver)
 }
 
 pin_project! {
     #[must_use = "streams do nothing unless polled"]
-    pub struct ReceivedStream<Fut, T, Recv> where Fut: Future {
+    pub struct ReceivedStream< Recv> {
         #[pin]
-        future: MaybeDone<Fut>,
-        receiver: inner::MaybeAllReceived<Recv>,
-        _item: PhantomData<T>,
+        handle: MaybeDone<FragileHandle<()>>,
+        receiver: MaybeAllReceived<Recv>,
     }
 }
 
-impl<Fut: Future, T, Recv> ReceivedStream<Fut, T, Recv> {
-    fn new(future: Fut, receiver: Recv) -> Self {
+impl<Recv> ReceivedStream<Recv> {
+    fn new(handle: JoinHandle<()>, receiver: Recv) -> Self {
         ReceivedStream {
-            future: maybe_done(future),
-            receiver: inner::MaybeAllReceived::InProgress(receiver),
-            _item: PhantomData,
+            handle: maybe_done(FragileHandle::new(handle)),
+            receiver: MaybeAllReceived::InProgress(receiver),
         }
     }
 }
 
-impl<Fut, T, Recv> Stream for ReceivedStream<Fut, T, Recv>
+impl<Recv> Stream for ReceivedStream<Recv>
 where
-    Fut: Future<Output = ()>,
-    Recv: inner::Receiver<Item = T>,
+    Recv: Receiver,
 {
-    type Item = T;
+    type Item = <Recv as Receiver>::Item;
 
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<T>> {
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.project();
-        let fut_poll = this.future.poll(cx).map(|()| None);
+        let fut_poll = this.handle.poll(cx).map(|()| None);
         let recv_poll = this.receiver.poll_next_recv(cx);
         if recv_poll.is_pending() {
             fut_poll
@@ -83,53 +74,78 @@ where
     }
 }
 
-mod inner {
-    use std::task::{Context, Poll};
-    use tokio::sync::mpsc;
+pub trait Receiver {
+    type Item;
 
-    pub(super) trait Receiver {
-        type Item;
+    fn poll_next_recv(&mut self, cx: &mut Context<'_>) -> Poll<Option<Self::Item>>;
+}
 
-        fn poll_next_recv(&mut self, cx: &mut Context<'_>) -> Poll<Option<Self::Item>>;
+impl<T> Receiver for mpsc::Receiver<T> {
+    type Item = T;
+
+    fn poll_next_recv(&mut self, cx: &mut Context<'_>) -> Poll<Option<T>> {
+        self.poll_recv(cx)
     }
+}
 
-    impl<T> Receiver for mpsc::Receiver<T> {
-        type Item = T;
+impl<T> Receiver for mpsc::UnboundedReceiver<T> {
+    type Item = T;
 
-        fn poll_next_recv(&mut self, cx: &mut Context<'_>) -> Poll<Option<T>> {
-            self.poll_recv(cx)
-        }
+    fn poll_next_recv(&mut self, cx: &mut Context<'_>) -> Poll<Option<T>> {
+        self.poll_recv(cx)
     }
+}
 
-    impl<T> Receiver for mpsc::UnboundedReceiver<T> {
-        type Item = T;
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum MaybeAllReceived<Recv> {
+    InProgress(Recv),
+    Done,
+}
 
-        fn poll_next_recv(&mut self, cx: &mut Context<'_>) -> Poll<Option<T>> {
-            self.poll_recv(cx)
-        }
-    }
+impl<Recv: Receiver> Receiver for MaybeAllReceived<Recv> {
+    type Item = <Recv as Receiver>::Item;
 
-    #[derive(Clone, Debug, Eq, PartialEq)]
-    pub(super) enum MaybeAllReceived<Recv> {
-        InProgress(Recv),
-        Done,
-    }
-
-    impl<Recv: Receiver> Receiver for MaybeAllReceived<Recv> {
-        type Item = <Recv as Receiver>::Item;
-
-        fn poll_next_recv(&mut self, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-            match self {
-                MaybeAllReceived::InProgress(recv) => {
-                    let p = recv.poll_next_recv(cx);
-                    if matches!(p, Poll::Ready(None)) {
-                        *self = MaybeAllReceived::Done;
-                    }
-                    p
+    fn poll_next_recv(&mut self, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        match self {
+            MaybeAllReceived::InProgress(recv) => {
+                let p = recv.poll_next_recv(cx);
+                if matches!(p, Poll::Ready(None)) {
+                    *self = MaybeAllReceived::Done;
                 }
-                MaybeAllReceived::Done => Poll::Ready(None),
+                p
             }
+            MaybeAllReceived::Done => Poll::Ready(None),
         }
+    }
+}
+
+pin_project! {
+    /// A wrapper around `tokio::task::JoinHandle` that aborts the task on drop.
+    #[derive(Debug)]
+    struct FragileHandle<T> {
+        #[pin]
+        inner: JoinHandle<T>
+    }
+
+    impl<T> PinnedDrop for FragileHandle<T> {
+        fn drop(this: Pin<&mut Self>) {
+            this.project().inner.abort();
+        }
+    }
+}
+
+impl<T> FragileHandle<T> {
+    fn new(inner: JoinHandle<T>) -> Self {
+        FragileHandle { inner }
+    }
+}
+
+impl<T> Future for FragileHandle<T> {
+    type Output = Result<T, tokio::task::JoinError>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.project();
+        this.inner.poll(cx)
     }
 }
 

@@ -9,7 +9,7 @@ license.workspace = true
 [dependencies]
 futures-util.workspace = true
 pin-project-lite.workspace = true
-tokio = { workspace = true, features = ["sync"] }
+tokio = { workspace = true, features = ["rt", "sync"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["io-util", "macros", "rt"] }
