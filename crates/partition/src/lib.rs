@@ -1,6 +1,6 @@
 #![cfg(nightly)]
 #![feature(pattern)]
-use std::str::pattern::Pattern;
+use std::str::pattern::{Pattern, Searcher};
 
 /// If `pattern` occurs in `s`, returns a triple of the portion of `s` before
 /// the pattern, the portion that matches the pattern, and the portion after
@@ -14,8 +14,9 @@ use std::str::pattern::Pattern;
 /// assert_eq!(partition("abc_123_xyz", ['-', '.']), None);
 /// ```
 pub fn partition<P: Pattern>(s: &str, pattern: P) -> Option<(&str, &str, &str)> {
-    let (i, sep) = s.match_indices(pattern).next()?;
-    Some((&s[..i], sep, &s[(i + sep.len())..]))
+    let mut searcher = pattern.into_searcher(s);
+    let (start, end) = searcher.next_match()?;
+    Some((&s[..start], &s[start..end], &s[end..]))
 }
 
 #[cfg(test)]
