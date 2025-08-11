@@ -1,4 +1,7 @@
-use futures_util::{stream::FuturesUnordered, Stream, StreamExt};
+use futures_util::{
+    stream::{FusedStream, FuturesUnordered},
+    Stream, StreamExt,
+};
 use pin_project_lite::pin_project;
 use std::future::Future;
 use std::pin::Pin;
@@ -30,6 +33,7 @@ impl<T: Send + 'static> Nursery<T> {
             NurseryStream {
                 receiver,
                 tasks: FuturesUnordered::new(),
+                closed: false,
             },
         )
     }
@@ -63,6 +67,7 @@ impl<T> Clone for Nursery<T> {
 pub struct NurseryStream<T> {
     receiver: UnboundedReceiver<FragileHandle<T>>,
     tasks: FuturesUnordered<FragileHandle<T>>,
+    closed: bool,
 }
 
 impl<T: 'static> Stream for NurseryStream<T> {
@@ -94,12 +99,19 @@ impl<T: 'static> Stream for NurseryStream<T> {
                 if closed {
                     // All Nursery clones dropped and all results yielded; end
                     // of stream
+                    self.closed = true;
                     None.into()
                 } else {
                     Poll::Pending
                 }
             }
         }
+    }
+}
+
+impl<T: 'static> FusedStream for NurseryStream<T> {
+    fn is_terminated(&self) -> bool {
+        self.closed
     }
 }
 
@@ -205,9 +217,11 @@ mod tests {
         assert_eq!(values, vec![1, 2, 3]);
         let r = timeout(Duration::from_millis(100), nursery_stream.next()).await;
         assert!(r.is_err());
+        assert!(!nursery_stream.is_terminated());
         drop(nursery);
         let r = timeout(Duration::from_millis(100), nursery_stream.next()).await;
         assert_eq!(r, Ok(None));
+        assert!(nursery_stream.is_terminated());
     }
 
     #[tokio::test]
