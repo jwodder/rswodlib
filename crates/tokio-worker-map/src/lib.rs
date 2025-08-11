@@ -1,4 +1,4 @@
-use futures_util::{FutureExt, Stream};
+use futures_util::{stream::FusedStream, FutureExt, Stream};
 use pin_project_lite::pin_project;
 use std::fmt;
 use std::future::Future;
@@ -319,6 +319,12 @@ impl<T, U: 'static> Stream for Receiver<T, U> {
     /// resumes unwinding the panic.
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<U>> {
         self.poll_recv(cx)
+    }
+}
+
+impl<T, U: 'static> FusedStream for Receiver<T, U> {
+    fn is_terminated(&self) -> bool {
+        self.is_closed() && self.is_empty()
     }
 }
 
@@ -651,5 +657,30 @@ mod tests {
         let mut values = receiver.collect::<Vec<_>>().await;
         values.sort_unstable();
         assert_eq!(values, (0..5).collect::<Vec<_>>());
+    }
+
+    #[tokio::test]
+    async fn no_close_until_drop() {
+        let workers = NonZeroUsize::new(5).unwrap();
+        let (sender, mut receiver) = worker_map(
+            |n: usize| async move { std::future::ready(n).await + 1 },
+            workers,
+            workers,
+        );
+        for i in 0..3 {
+            sender.send(i).await.unwrap();
+        }
+        let mut values = Vec::new();
+        values.push(receiver.next().await.unwrap());
+        values.push(receiver.next().await.unwrap());
+        values.push(receiver.next().await.unwrap());
+        values.sort_unstable();
+        assert_eq!(values, vec![1, 2, 3]);
+        assert_eq!(receiver.try_recv(), Err(TryRecvError::Empty));
+        assert!(!receiver.is_terminated());
+        drop(sender);
+        let r = tokio::time::timeout(std::time::Duration::from_millis(100), receiver.next()).await;
+        assert_eq!(r, Ok(None));
+        assert!(receiver.is_terminated());
     }
 }
