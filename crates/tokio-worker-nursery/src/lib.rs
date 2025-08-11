@@ -1,4 +1,4 @@
-use futures_util::{future::BoxFuture, FutureExt, Stream};
+use futures_util::{future::BoxFuture, stream::FusedStream, FutureExt, Stream};
 use pin_project_lite::pin_project;
 use std::fmt;
 use std::future::Future;
@@ -23,7 +23,7 @@ type UnwindResult<T> = Result<T, Box<dyn std::any::Any + Send>>;
 #[derive(Debug)]
 pub struct WorkerNursery<T> {
     inner: async_channel::Sender<BoxFuture<'static, T>>,
-    done: Arc<AtomicBool>,
+    was_shutdown: Arc<AtomicBool>,
 }
 
 impl<T: Send + 'static> WorkerNursery<T> {
@@ -34,15 +34,15 @@ impl<T: Send + 'static> WorkerNursery<T> {
         let (input_sender, input_receiver) = async_channel::unbounded::<BoxFuture<'static, T>>();
         let (output_sender, output_receiver) = mpsc::unbounded_channel();
         let mut tasks = JoinSet::new();
-        let done = Arc::new(AtomicBool::new(false));
+        let was_shutdown = Arc::new(AtomicBool::new(false));
         for _ in 0..workers.get() {
             tasks.spawn({
                 let input = input_receiver.clone();
                 let output = output_sender.clone();
-                let done = done.clone();
+                let was_shutdown = was_shutdown.clone();
                 async move {
                     while let Ok(fut) = input.recv().await {
-                        if done.load(Ordering::SeqCst) {
+                        if was_shutdown.load(Ordering::SeqCst) {
                             break;
                         }
                         let r = std::panic::AssertUnwindSafe(fut).catch_unwind().await;
@@ -56,12 +56,12 @@ impl<T: Send + 'static> WorkerNursery<T> {
         (
             WorkerNursery {
                 inner: input_sender,
-                done: done.clone(),
+                was_shutdown: was_shutdown.clone(),
             },
             WorkerNurseryStream {
                 inner: output_receiver,
                 closer: Closer(input_receiver),
-                done,
+                was_shutdown,
                 _tasks: tasks,
             },
         )
@@ -102,12 +102,12 @@ impl<T> WorkerNursery<T> {
     /// shut down already.
     pub fn shutdown(&self) -> bool {
         self.close();
-        !self.done.swap(true, Ordering::SeqCst)
+        !self.was_shutdown.swap(true, Ordering::SeqCst)
     }
 
     /// Returns `true` if the nursery is shut down.
     pub fn is_shutdown(&self) -> bool {
-        self.done.load(Ordering::SeqCst)
+        self.was_shutdown.load(Ordering::SeqCst)
     }
 
     /// Returns `true` if the nursery's input channel is empty.
@@ -127,7 +127,7 @@ impl<T> Clone for WorkerNursery<T> {
     fn clone(&self) -> WorkerNursery<T> {
         WorkerNursery {
             inner: self.inner.clone(),
-            done: self.done.clone(),
+            was_shutdown: self.was_shutdown.clone(),
         }
     }
 }
@@ -147,7 +147,7 @@ pin_project! {
     pub struct WorkerNurseryStream<T> {
         inner: mpsc::UnboundedReceiver<UnwindResult<T>>,
         closer: Closer<T>,
-        done: Arc<AtomicBool>,
+        was_shutdown: Arc<AtomicBool>,
         // The JoinSet of tasks is kept around so that the tasks are aborted
         // only when the stream is dropped.
         _tasks: JoinSet<()>,
@@ -224,12 +224,12 @@ impl<T> WorkerNurseryStream<T> {
     /// shut down already.
     pub fn shutdown(&self) -> bool {
         self.close();
-        !self.done.swap(true, Ordering::SeqCst)
+        !self.was_shutdown.swap(true, Ordering::SeqCst)
     }
 
     /// Returns `true` if the nursery is shut down.
     pub fn is_shutdown(&self) -> bool {
-        self.done.load(Ordering::SeqCst)
+        self.was_shutdown.load(Ordering::SeqCst)
     }
 
     /// Returns `true` if the output stream is empty.
@@ -277,6 +277,12 @@ impl<T: 'static> Stream for WorkerNurseryStream<T> {
     /// resumes unwinding the panic.
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<T>> {
         self.poll_recv(cx)
+    }
+}
+
+impl<T: 'static> FusedStream for WorkerNurseryStream<T> {
+    fn is_terminated(&self) -> bool {
+        self.is_closed() && self.is_empty()
     }
 }
 
@@ -570,11 +576,13 @@ mod tests {
         values.sort_unstable();
         assert_eq!(values, vec![1, 2, 3]);
         assert_eq!(nursery_stream.try_recv(), Err(TryRecvError::Empty));
+        assert!(!nursery_stream.is_terminated());
         drop(nursery);
         //assert_eq!(nursery_stream.try_recv(), Err(TryRecvError::Done));
         let r = tokio::time::timeout(std::time::Duration::from_millis(100), nursery_stream.next())
             .await;
         assert_eq!(r, Ok(None));
+        assert!(nursery_stream.is_terminated());
     }
 
     #[tokio::test]
