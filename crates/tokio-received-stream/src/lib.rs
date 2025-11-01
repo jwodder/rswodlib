@@ -1,5 +1,5 @@
 use futures_util::{
-    future::{maybe_done, MaybeDone},
+    future::{MaybeDone, maybe_done},
     stream::Stream,
 };
 use pin_project_lite::pin_project;
@@ -154,8 +154,8 @@ mod tests {
     use super::*;
     use futures_util::stream::StreamExt;
     use std::io::Cursor;
-    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
     use tokio::io::AsyncBufReadExt;
 
     #[tokio::test]

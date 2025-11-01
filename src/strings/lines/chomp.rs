@@ -9,8 +9,7 @@
 /// ```
 pub fn chomp(s: &str) -> &str {
     let s = s.strip_suffix('\n').unwrap_or(s);
-    let s = s.strip_suffix('\r').unwrap_or(s);
-    s
+    s.strip_suffix('\r').unwrap_or(s)
 }
 
 #[cfg(test)]
