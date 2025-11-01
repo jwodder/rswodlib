@@ -112,7 +112,7 @@ mod tests {
     #[cfg(unix)]
     mod unix {
         use super::*;
-        use assert_fs::{prelude::*, NamedTempFile};
+        use assert_fs::{NamedTempFile, prelude::*};
         use predicates::prelude::*;
 
         #[test]

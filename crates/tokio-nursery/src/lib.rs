@@ -1,13 +1,13 @@
 use futures_util::{
-    stream::{FusedStream, FuturesUnordered},
     Stream, StreamExt,
+    stream::{FusedStream, FuturesUnordered},
 };
 use pin_project_lite::pin_project;
 use std::future::Future;
 use std::pin::Pin;
-use std::task::{ready, Context, Poll};
+use std::task::{Context, Poll, ready};
 use tokio::{
-    sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
+    sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel},
     task::{JoinError, JoinHandle},
 };
 

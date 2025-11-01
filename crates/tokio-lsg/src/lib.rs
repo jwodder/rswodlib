@@ -4,8 +4,8 @@ use std::pin::Pin;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::task::{Context, Poll};
 use tokio::sync::{
-    mpsc::{channel, Receiver, Sender},
     Semaphore,
+    mpsc::{Receiver, Sender, channel},
 };
 use tokio_util::sync::CancellationToken;
 

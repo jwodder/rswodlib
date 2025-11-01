@@ -3,7 +3,7 @@ use pin_project_lite::pin_project;
 use std::collections::HashSet;
 use std::hash::Hash;
 use std::pin::Pin;
-use std::task::{ready, Context, Poll};
+use std::task::{Context, Poll, ready};
 
 pub trait UniqueExt: Stream {
     /// Yield only unique values from the stream
@@ -73,7 +73,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use futures_util::stream::{iter, StreamExt};
+    use futures_util::stream::{StreamExt, iter};
 
     #[tokio::test]
     async fn test_unique_stream() {
