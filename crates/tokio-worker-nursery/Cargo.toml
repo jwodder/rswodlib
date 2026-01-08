@@ -7,7 +7,7 @@ repository.workspace = true
 license.workspace = true
 
 [dependencies]
-async-channel = "2.3.1"
+async-channel.workspace = true
 futures-util = { workspace = true, features = ["std"] }
 pin-project-lite.workspace = true
 tokio = { workspace = true, features = ["rt", "sync"] }

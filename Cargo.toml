@@ -8,6 +8,7 @@ repository = "https://github.com/jwodder/rswodlib"
 license = "MIT"
 
 [workspace.dependencies]
+async-channel = "2.3.1"
 futures-util = { version = "0.3.29", default-features = false }
 pin-project-lite = "0.2.12"
 rstest = { version = "0.26.0", default-features = false }
