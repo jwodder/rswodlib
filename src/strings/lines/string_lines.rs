@@ -4,11 +4,14 @@ use std::iter::FusedIterator;
 /// Like [`str::lines`], except it consumes a `String` and yields `String`s,
 /// and a lone CR is also treated as a newline sequence.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct StringLines(String);
+pub struct StringLines {
+    content: String,
+    offset: usize,
+}
 
 impl StringLines {
     pub fn new(content: String) -> StringLines {
-        StringLines(content)
+        StringLines { content, offset: 0 }
     }
 }
 
@@ -16,18 +19,22 @@ impl Iterator for StringLines {
     type Item = String;
 
     fn next(&mut self) -> Option<String> {
-        if self.0.is_empty() {
+        if self.offset == self.content.len() {
             return None;
         }
-        let end = newlines(&self.0).next().map_or(self.0.len(), |p| p.1);
-        let mut line: String = self.0.drain(0..end).collect();
-        if line.ends_with('\n') {
-            line.pop();
+        let next_offset = newlines(&self.content[self.offset..])
+            .next()
+            .map_or(self.content.len(), |p| p.1 + self.offset);
+        let mut end = next_offset;
+        if end > 0 && self.content.as_bytes()[end - 1] == b'\n' {
+            end -= 1;
         }
-        if line.ends_with('\r') {
-            line.pop();
+        if end > 0 && self.content.as_bytes()[end - 1] == b'\r' {
+            end -= 1;
         }
-        Some(line)
+        let line = &self.content[self.offset..end];
+        self.offset = next_offset;
+        Some(line.to_owned())
     }
 }
 
