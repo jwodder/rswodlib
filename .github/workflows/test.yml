@@ -118,7 +118,7 @@ jobs:
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # master
         with:
           # Use nightly so `partition` gets covered.
-          toolchain: nightly
+          toolchain: stable
           components: llvm-tools
 
       - name: Activate cache
